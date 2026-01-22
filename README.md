@@ -1,0 +1,217 @@
+# Debrid-Link Telegram Bot
+
+A production-grade Telegram bot for downloading torrents, magnet links, and hoster links using Debrid-Link.fr service.
+
+## ✨ Features
+
+### Core Functionality
+- 🧲 **Multi-format Support**: Magnet links, torrent files, and 50+ file hosters
+- 📦 **Smart ZIP**: Auto-creates ZIP for torrents with 15+ files
+- 🎯 **ZIP on Demand**: Add `-zip` or `-z` flag to any download
+- 📊 **Real-time Progress**: Live download progress with speed and ETA
+- 🔗 **Direct Download Links**: Ready-to-use Debrid-Link CDN URLs
+
+### User Experience
+- 🎨 **Beautiful UI**: Aesthetic messages with bold/italic styling
+- ⬇️ **Smart Buttons**: Download buttons for all file types
+- 👤 **User Mentions**: Clickable user profiles in messages
+- 💬 **Clear Help System**: Separate user and admin commands
+- 📂 **Folder Detection**: Blocks MEGA/GDrive folder links with helpful messages
+
+### Administration
+- 🔐 **Authorization System**: Chat-based access control
+- 👥 **Multi-admin Support**: Multiple bot administrators
+- 📋 **Admin Logging**: View bot logs with `/log` command
+- 📊 **Account Limits**: Check Debrid-Link usage with `/limits`
+- ❌ **Download Control**: Cancel ongoing downloads
+
+### Deployment
+- 🚀 **Render Support**: Built-in health check endpoint
+- 🐳 **Docker Ready**: Full Docker & Docker Compose support
+- 🌐 **Always Online**: Health check page for uptime monitoring
+
+## 🚀 Quick Start
+
+### Deploy to Render
+
+1. Fork this repository
+2. Create a new Web Service on [Render](https://render.com)
+3. Connect your forked repository
+4. Add environment variables (see Configuration)
+5. Set Start Command: `python bot.py`
+6. Deploy!
+
+The bot includes a health check endpoint at `/` and `/health` for Render's uptime monitoring.
+
+### Docker Deployment
+
+```bash
+# Clone repository
+git clone <your-repo-url>
+cd debrid-bot
+
+# Create .env file (see Configuration)
+
+# Start with Docker Compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+```
+
+### Manual Installation
+
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Create .env file (see Configuration)
+
+# Run bot
+python bot.py
+```
+
+## ⚙️ Configuration
+
+Create a `.env` file with the following variables:
+
+```env
+API_ID=your_telegram_api_id
+API_HASH=your_telegram_api_hash
+BOT_TOKEN=your_bot_token_from_botfather
+DEBRID_KEY=your_debrid_link_api_key
+ADMIN_IDS=your_telegram_id,another_admin_id
+PORT=8080  # Optional, for health check server
+```
+
+### Getting Credentials
+
+| Variable | Where to Get It |
+|----------|----------------|
+| `API_ID` & `API_HASH` | [my.telegram.org](https://my.telegram.org) |
+| `BOT_TOKEN` | [@BotFather](https://t.me/BotFather) on Telegram |
+| `DEBRID_KEY` | [debrid-link.fr/apikey](https://debrid-link.fr/webapp/apikey) |
+| `ADMIN_IDS` | Your Telegram user ID (use [@userinfobot](https://t.me/userinfobot)) |
+
+## 📱 Commands
+
+### User Commands
+
+**Download Commands:**
+- `/dl <link>` - Download any supported link
+- `/dl <link> -zip` - Download and create ZIP archive
+- `/dl -z` - Reply to a link/file to download with ZIP
+
+**Info Commands:**
+- `/start` - Welcome message and quick start guide
+- `/help` - Comprehensive help with all commands
+
+### Admin Commands
+
+- `/auth [chat_id]` - Authorize a chat (uses current chat if no ID given)
+- `/deauth [chat_id]` - Revoke chat authorization
+- `/limits` - View Debrid-Link account usage and limits
+- `/log [lines]` - View recent bot logs (default: 60 lines)
+
+## 🎯 Usage Examples
+
+### Download a Magnet Link
+```
+/dl magnet:?xt=urn:btih:abc123...
+```
+
+### Download with ZIP Archive
+```
+/dl magnet:?xt=urn:btih:abc123... -zip
+```
+
+### Reply to Download
+1. Send or forward a magnet link, torrent file, or hoster link
+2. Reply to it with: `/dl` or `/dl -z` for ZIP
+
+### Auto-ZIP Feature
+Torrents with **15 or more files** automatically create ZIP archives, even without the `-zip` flag!
+
+## 🔗 Supported Sources
+
+### Torrents
+- 🧲 Magnet links
+- 📁 .torrent files (upload or forward)
+
+### File Hosters (50+)
+- MEGA (file links only, not folders)
+- RapidGator
+- Uploaded.to
+- 1fichier
+- Mediafire
+- And many more...
+
+**Note:** Folder links (MEGA, Google Drive) are automatically detected and rejected with helpful instructions.
+
+## 🏗️ Project Structure
+
+```
+debrid-bot/
+├── bot.py                   # Main bot application
+├── web_server.py            # Health check server (Render support)
+├── config.py                # Configuration management
+├── requirements.txt         # Python dependencies
+├── Dockerfile              # Docker image
+├── docker-compose.yml      # Docker Compose config
+├── services/
+│   ├── auth_service.py    # Authorization system
+│   ├── debrid_service.py  # Debrid-Link API client
+│   └── paste_service.py   # Paste service for long outputs
+└── utils/
+    ├── display.py         # Message formatting
+    └── keyboards.py       # Telegram keyboards
+```
+
+## 🐛 Troubleshooting
+
+### Bot Not Responding
+- Check logs: `docker-compose logs -f`
+- Verify `.env` configuration
+- Ensure bot is authorized for the chat: `/auth`
+
+### API Errors
+- Verify Debrid-Link API key is valid
+- Check account status at debrid-link.fr
+- Ensure you have available download slots
+
+### MEGA/Google Drive Issues
+- **Folder links are not supported** - use direct file links
+- Make sure Google Drive files are publicly accessible
+- MEGA folder links: Extract individual file links instead
+
+## 🌐 Health Check Endpoint
+
+The bot runs a web server on port `8080` (configurable via `PORT` env var) with a beautiful status page at:
+- `/` - Main status page
+- `/health` - Health check endpoint
+
+Perfect for:
+- Render.com uptime monitoring
+- External ping services (UptimeRobot, etc.)
+- Keeping free-tier services always online
+
+## 📄 License
+
+MIT License - Feel free to use and modify!
+
+## 🙏 Support
+
+For issues or questions:
+- Use `/help` in the bot
+- Check error messages for troubleshooting
+- Review this README
+
+---
+
+**Requirements**: Active Debrid-Link premium account
+
+**Powered by**: [Pyrogram](https://docs.pyrogram.org/) & [Debrid-Link](https://debrid-link.fr/)

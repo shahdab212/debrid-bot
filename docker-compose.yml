@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  debrid-bot:
+    build: .
+    container_name: debrid-link-bot
+    restart: unless-stopped
+    environment:
+      - API_ID=${API_ID}
+      - API_HASH=${API_HASH}
+      - BOT_TOKEN=${BOT_TOKEN}
+      - DEBRID_KEY=${DEBRID_KEY}
+      - ADMIN_IDS=${ADMIN_IDS}
+    volumes:
+      - ./debrid_bot.session:/app/debrid_bot.session
+      - ./auth_chats.txt:/app/auth_chats.txt
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

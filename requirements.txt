@@ -1,0 +1,5 @@
+https://github.com/Pyrogram/Pyrogram/archive/master.zip
+tgcrypto
+aiohttp
+aiofiles
+pydantic-settings
