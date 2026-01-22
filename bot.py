@@ -792,6 +792,7 @@ async def send_completion_message(msg: Message, data: dict, t_id: str, user, cre
     final_text = (
         f"✨ **Download Complete!** ✨\n\n"
         f"{'━' * 30}\n\n"
+        f"📦 **File Name:** __{name}__\n\n"
         f"👤 **User:** {user_mention}\n"
         f"🆔 **User ID:** `{user.id}`\n\n"
         f"📦 **Torrent:** __{name}__\n"
