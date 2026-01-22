@@ -558,9 +558,9 @@ async def dl_handler(client: Client, message: Message):
                     await sent_msg.edit_text(
                         f"✨ **Download Ready!** ✨\n\n"
                         f"{'━' * 30}\n\n"
+                        f"📂 **Filename:** __{file_name}__\n\n"
                         f"👤 **User:** {user_mention}\n"
                         f"🆔 **User ID:** `{user.id}`\n\n"
-                        f"📂 **Filename:** __{file_name}__\n\n"
                         f"🔗 **Download Link:**\n"
                         f"`{dl_link}`\n\n"
                         f"{'━' * 30}",
@@ -787,7 +787,7 @@ async def send_completion_message(msg: Message, data: dict, t_id: str, user, cre
     # Add ZIP info if available
     zip_info = ""
     if zip_url:
-        zip_info = f"\n💾 **Archive:** _ZIP file ready for download_\n"
+        zip_info = f"\n💾 **Archive:** _ZIP file ready for download_"
     
     final_text = (
         f"✨ **Download Complete!** ✨\n\n"
@@ -797,7 +797,7 @@ async def send_completion_message(msg: Message, data: dict, t_id: str, user, cre
         f"🆔 **User ID:** `{user.id}`\n\n"
         f"📦 **Torrent:** __{name}__\n"
         f"{links_text}"
-        f"{zip_info}\n"
+        f"{zip_info}\n\n"
         f"{'━' * 30}"
     )
     
