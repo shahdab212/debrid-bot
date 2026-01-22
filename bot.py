@@ -795,6 +795,7 @@ async def send_completion_message(msg: Message, data: dict, t_id: str, user, cre
         f"📦 **File Name:** __{name}__\n\n"
         f"👤 **User:** {user_mention}\n"
         f"🆔 **User ID:** `{user.id}`"
+        f"{links_text}"
         f"{zip_info}\n\n"
         f"{'━' * 30}"
     )
