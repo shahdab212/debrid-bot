@@ -5,9 +5,11 @@ A production-grade Telegram bot for downloading torrents, magnet links, and host
 ## ✨ Features
 
 ### Core Functionality
-- 🧲 **Multi-format Support**: Magnet links, torrent files, and 50+ file hosters
+- 🧲 **Multi-format Support**: Magnet links, torrent files (file/URL), and 50+ file hosters
 - 📦 **Smart ZIP**: Auto-creates ZIP for torrents with 15+ files
-- 🎯 **ZIP on Demand**: Add `-zip` or `-z` flag to any download
+- 🎯 **Flexible ZIP**:
+  - Add `-zip` or `-z` to force ZIP creation
+  - Add `-nozip` or `-nz` to disable auto-ZIP (download files individually)
 - 📊 **Real-time Progress**: Live download progress with speed and ETA
 - 🔗 **Direct Download Links**: Ready-to-use Debrid-Link CDN URLs
 - 🛡️ **Cloudflare Proxy**: Route downloads through Cloudflare Workers (prevents IP bans)
@@ -18,19 +20,21 @@ A production-grade Telegram bot for downloading torrents, magnet links, and host
 - 👤 **User Mentions**: Clickable user profiles in messages
 - 💬 **Clear Help System**: Separate user and admin commands
 - 📂 **Folder Detection**: Blocks MEGA/GDrive folder links with helpful messages
+- 🌐 **Torrent URL Support**: Direct download from http/https links pointing to .torrent files
 
 ### Administration
-- 🔐 **Authorization System**: Chat-based access control
+- 🔐 **Persistent Auth**: Database-backed authorization system (PostgreSQL/SQLite)
 - 👥 **Multi-admin Support**: Multiple bot administrators
 - 📋 **Admin Logging**: View bot logs with `/log` command
 - 📊 **Account Limits**: Check Debrid-Link usage with `/limits`
-- ❌ **Download Control**: Cancel ongoing downloads
+- 🔄 **Remote Management**: Restart the bot remotely with `/restart`
+- 👥 **User Management**: List all authorized users with `/users`
 
 ### Deployment
 - 🚀 **Render Support**: Built-in health check endpoint
 - 🐳 **Docker Ready**: Full Docker & Docker Compose support
 - 🌐 **Always Online**: Health check page for uptime monitoring
-- ☁️ **Cloudflare Workers**: Free tier proxy for IP protection (100k req/day)
+  - **Single IP Protection**: Optional Cloudflare Worker proxy
 
 ## 🚀 Quick Start
 
@@ -110,17 +114,6 @@ The bot uses a database to store authorized chat IDs, ensuring they persist acro
 **Migration:**
 - Existing `auth_chats.txt` is automatically migrated to database on first startup
 - Original file is backed up as `auth_chats.txt.migrated`
-- Migration only runs once
-```
-
-### Getting Credentials
-
-| Variable | Where to Get It |
-|----------|----------------|
-| `API_ID` & `API_HASH` | [my.telegram.org](https://my.telegram.org) |
-| `BOT_TOKEN` | [@BotFather](https://t.me/BotFather) on Telegram |
-| `DEBRID_KEY` | [debrid-link.fr/apikey](https://debrid-link.fr/webapp/apikey) |
-| `ADMIN_IDS` | Your Telegram user ID (use [@userinfobot](https://t.me/userinfobot)) |
 
 ## 📱 Commands
 
@@ -129,7 +122,9 @@ The bot uses a database to store authorized chat IDs, ensuring they persist acro
 **Download Commands:**
 - `/dl <link>` - Download any supported link
 - `/dl <link> -zip` - Download and create ZIP archive
+- `/dl <link> -nozip` - Download without creating ZIP (overrides auto-ZIP)
 - `/dl -z` - Reply to a link/file to download with ZIP
+- `/dl -nz` - Reply to a link/file to download without ZIP
 
 **Info Commands:**
 - `/start` - Welcome message and quick start guide
@@ -139,8 +134,11 @@ The bot uses a database to store authorized chat IDs, ensuring they persist acro
 
 - `/auth [chat_id]` - Authorize a chat (uses current chat if no ID given)
 - `/deauth [chat_id]` - Revoke chat authorization
+- `/users` - List all authorized users/chats
 - `/limits` - View Debrid-Link account usage and limits
 - `/log [lines]` - View recent bot logs (default: 60 lines)
+- `/restart` - Restart the bot process
+- `/cancel` - Cancel an active download (Reply to download message)
 
 ## 🎯 Usage Examples
 
@@ -154,18 +152,22 @@ The bot uses a database to store authorized chat IDs, ensuring they persist acro
 /dl magnet:?xt=urn:btih:abc123... -zip
 ```
 
+### Download Large Torrent without ZIP
+```
+/dl magnet:?xt=urn:btih:abc123... -nozip
+```
+*(Useful for torrents with >15 files where you want individual links)*
+
 ### Reply to Download
 1. Send or forward a magnet link, torrent file, or hoster link
-2. Reply to it with: `/dl` or `/dl -z` for ZIP
-
-### Auto-ZIP Feature
-Torrents with **15 or more files** automatically create ZIP archives, even without the `-zip` flag!
+2. Reply to it with: `/dl` or `/dl -z` (ZIP) or `/dl -nz` (No ZIP)
 
 ## 🔗 Supported Sources
 
 ### Torrents
 - 🧲 Magnet links
 - 📁 .torrent files (upload or forward)
+- 🌐 .torrent URLs (direct HTTP/HTTPS links)
 
 ### File Hosters (50+)
 - MEGA (file links only, not folders)
@@ -231,19 +233,6 @@ After setup, download links will:
 - Show as single IP to Debrid-Link
 
 **Full deployment guide:** See [`cloudflare/README.md`](cloudflare/README.md)
-
-### How It Works
-
-```
-User → Bot → Cloudflare Worker → Debrid-Link
-                    ↓
-                Single IP
-                (No ban risk!)
-```
-
-Without proxy: Each user's IP → Debrid-Link (⚠️ Multi-IP detection)
-
-With proxy: Cloudflare IP → Debrid-Link (✅ Single IP, safe)
 
 ## 🏗️ Project Structure
 
