@@ -8,6 +8,7 @@ class Config(BaseSettings):
     DEBRID_KEY: str
     ADMIN_IDS: str  # Comma-separated admin IDs
     WORKER_URL: Optional[str] = None  # Cloudflare Worker URL (optional)
+    DATABASE_URL: Optional[str] = None  # Database URL (optional, defaults to SQLite)
 
     class Config:
         env_file = ".env"

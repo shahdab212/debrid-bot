@@ -44,6 +44,9 @@ app = Client(
 # Global dictionary to track torrents: {torrent_id: {"msg": Message, "user": User, "create_zip": bool}}
 TRACKED_TORRENTS = {}
 
+# Global dictionary for file pagination: {message_id: {"files": list, "current_page": int, "torrent_id": str, "user": User, "zip_url": str}}
+FILE_PAGES = {}
+
 @app.on_message(filters.command("start"))
 async def start_handler(client: Client, message: Message):
     """Enhanced start command with inline keyboard."""
@@ -83,6 +86,7 @@ async def help_handler(client: Client, message: Message):
         "   Download any supported link instantly\n"
         "   • Works with: Magnets, torrents, hosters\n"
         "   • Add **-zip** or **-z** for ZIP archives\n"
+        "   • Add **-nozip** or **-nz** to prevent auto-ZIP\n"
         "   • Reply to links/files with /dl\n"
         "   • Example: /dl magnet:?xt=abc123 -zip\n\n"
         
@@ -109,9 +113,11 @@ async def help_handler(client: Client, message: Message):
         "🔒 **ADMIN COMMANDS**\n\n"
         "▪️ /auth **[chat_id]** • Authorize chat\n"
         "▪️ /deauth **[chat_id]** • Revoke access\n"
+        "▪️ /users • List authorized users\n"
         "▪️ /cancel **<torrent_id>** • Cancel download\n"
         "▪️ /limits • View account usage\n"
-        "▪️ /log **[lines]** • View bot logs\n\n"
+        "▪️ /log **[lines]** • View bot logs\n"
+        "▪️ /restart • Restart the bot\n\n"
         
         f"{'━' * 32}\n\n"
         "💡 __Fast, reliable downloads powered by Debrid-Link__"
@@ -144,7 +150,7 @@ async def auth_handler(client: Client, message: Message):
             await message.reply_text("❌ **Invalid Chat ID**\nPlease provide a valid numeric chat ID.")
             return
     
-    await auth_service.add_chat(chat_id)
+    await auth_service.add_chat(chat_id, authorized_by=message.from_user.id)
     await message.reply_text(
         f"✅ **Authorization Successful**\n\n"
         f"Chat ID: `{chat_id}`\n"
@@ -234,6 +240,141 @@ async def log_handler(client: Client, message: Message):
     except Exception as e:
         logger.error(f"Log command error: {e}", exc_info=True)
         await message.reply_text(f"❌ Error reading logs: {str(e)}")
+
+@app.on_message(filters.command("users"))
+async def users_handler(client: Client, message: Message):
+    """List all authorized users (admin only)."""
+    # Check if user is admin
+    if not config.is_admin(message.from_user.id):
+        await message.reply_text(
+            "⛔ **Access Denied**\n\n"
+            "Only bot administrators can view authorized users."
+        )
+        return
+    
+    msg = await message.reply_text("⏳ **Fetching authorized users...**")
+    
+    try:
+        from database import AsyncSessionLocal
+        from models import AuthorizedChat
+        from sqlalchemy import select
+        
+        # Get all authorized chats from database
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(AuthorizedChat).order_by(AuthorizedChat.authorized_at.desc())
+            )
+            authorized_chats = result.scalars().all()
+        
+        if not authorized_chats:
+            await msg.edit_text(
+                "📋 **Authorized Users**\n\n"
+                "No authorized users found.\n\n"
+                "💡 Use `/auth <chat_id>` to authorize users."
+            )
+            return
+        
+        # Build user list with names
+        user_list = []
+        for idx, chat in enumerate(authorized_chats, 1):
+            try:
+                # Try to get chat info
+                chat_info = await client.get_chat(chat.chat_id)
+                
+                # Format name based on chat type
+                if chat_info.type == enums.ChatType.PRIVATE:
+                    # Private chat - show user name with mention
+                    if chat_info.first_name:
+                        name = chat_info.first_name
+                        if chat_info.last_name:
+                            name += f" {chat_info.last_name}"
+                        user_mention = f"[{name}](tg://user?id={chat.chat_id})"
+                    else:
+                        user_mention = f"User `{chat.chat_id}`"
+                else:
+                    # Group/channel - show title
+                    user_mention = f"**{chat_info.title}**" if chat_info.title else f"Chat `{chat.chat_id}`"
+                
+                # Format authorized by
+                auth_by_text = ""
+                if chat.authorized_by:
+                    auth_by_text = f" • By: `{chat.authorized_by}`"
+                
+                # Format date
+                import datetime
+                auth_date = chat.authorized_at.strftime("%Y-%m-%d %H:%M")
+                
+                user_list.append(
+                    f"{idx}. {user_mention}\n"
+                    f"   ID: `{chat.chat_id}`{auth_by_text}\n"
+                    f"   Date: `{auth_date}`"
+                )
+                
+            except Exception as e:
+                # If we can't get chat info, just show ID
+                logger.warning(f"Could not get info for chat {chat.chat_id}: {e}")
+                auth_date = chat.authorized_at.strftime("%Y-%m-%d %H:%M")
+                user_list.append(
+                    f"{idx}. Chat ID: `{chat.chat_id}`\n"
+                    f"   Date: `{auth_date}`"
+                )
+        
+        # Send formatted message
+        users_text = (
+            f"👥 **Authorized Users** ({len(authorized_chats)} total)\n\n"
+            f"{'━' * 35}\n\n"
+            + "\n\n".join(user_list) +
+            f"\n\n{'━' * 35}\n\n"
+            f"💡 Use `/auth` to add or `/deauth` to remove users"
+        )
+        
+        await msg.edit_text(users_text)
+        
+    except Exception as e:
+        logger.error(f"Users command error: {e}", exc_info=True)
+        await msg.edit_text(
+            f"❌ **Error Fetching Users**\n\n"
+            f"Error: `{str(e)}`"
+        )
+
+@app.on_message(filters.command("restart"))
+async def restart_handler(client: Client, message: Message):
+    """Restart the bot (admin only)."""
+    # Check if user is admin
+    if not config.is_admin(message.from_user.id):
+        await message.reply_text(
+            "⛔ **Access Denied**\n\n"
+            "Only bot administrators can restart the bot."
+        )
+        return
+    
+    msg = await message.reply_text(
+        "🔄 **Restarting Bot...**\n\n"
+        "The bot will restart in a moment.\n"
+        "Please wait a few seconds."
+    )
+    
+    logger.info(f"Bot restart initiated by admin {message.from_user.id}")
+    
+    # Save restart info to file for confirmation after restart
+    import json
+    restart_info = {
+        "chat_id": message.chat.id,
+        "message_id": msg.id
+    }
+    with open(".restart_flag", "w") as f:
+        json.dump(restart_info, f)
+    
+    # Give time for message to send
+    await asyncio.sleep(1)
+    
+    # Restart the bot
+    import sys
+    import os
+    
+    logger.info("Executing bot restart...")
+    os.execv(sys.executable, ['python'] + sys.argv)
+
 
 @app.on_message(filters.command("limits"))
 @authorized_only
@@ -473,6 +614,7 @@ async def dl_handler(client: Client, message: Message):
     link = None
     file_bytes = None
     create_zip = False  # Flag for ZIP creation
+    force_no_zip = False  # Flag to prevent auto-ZIP
     
     # 1. Parse flags first (works for both direct links and replies)
     args = message.command[1:] if len(message.command) > 1 else []
@@ -482,6 +624,13 @@ async def dl_handler(client: Client, message: Message):
         create_zip = True
         # Remove flags from args
         args = [arg for arg in args if arg not in ['-zip', '-z']]
+    
+    # Check for NO-ZIP flag (overrides auto-ZIP behavior)
+    if '-nozip' in args or '-nz' in args:
+        force_no_zip = True
+        create_zip = False  # Explicitly disable ZIP
+        # Remove flags from args
+        args = [arg for arg in args if arg not in ['-nozip', '-nz']]
     
     # 2. Determine the download source
     # Priority: explicit argument > reply to message
@@ -520,7 +669,7 @@ async def dl_handler(client: Client, message: Message):
                 t_id = resp["value"]["id"]
                 # Store ZIP flag in tracked torrents
                 # Check directly if cached
-                await check_instant_cache(sent_msg, t_id, message.from_user, create_zip)
+                await check_instant_cache(sent_msg, t_id, message.from_user, create_zip, force_no_zip)
             else:
                 error_msg = resp.get('error', 'Unknown error')
                 status_code = resp.get('status_code', '')
@@ -544,7 +693,7 @@ async def dl_handler(client: Client, message: Message):
                 if resp.get("success"):
                     t_id = resp["value"]["id"]
                     # Check directly if cached
-                    await check_instant_cache(sent_msg, t_id, message.from_user, create_zip)
+                    await check_instant_cache(sent_msg, t_id, message.from_user, create_zip, force_no_zip)
                 else:
                     error_msg = resp.get('error', 'Unknown error')
                     status_code = resp.get('status_code', '')
@@ -724,14 +873,14 @@ async def dl_handler(client: Client, message: Message):
             f"{'─' * 30}"
         )
 
-async def check_instant_cache(msg: Message, t_id: str, user, create_zip: bool = False):
+async def check_instant_cache(msg: Message, t_id: str, user, create_zip: bool = False, force_no_zip: bool = False):
     """Checks if a torrent is 100% done immediately after adding."""
     # We need to fetch the list because the add response usually doesn't have file links yet
     try:
         response = await debrid_service.get_seedbox_torrents()
         if not response.get("success"):
             # Fallback to monitoring
-            TRACKED_TORRENTS[t_id] = {"msg": msg, "user": user, "create_zip": create_zip}
+            TRACKED_TORRENTS[t_id] = {"msg": msg, "user": user, "create_zip": create_zip, "force_no_zip": force_no_zip}
             await msg.edit_text("🌊 Added to Seedbox. Waiting for metadata...")
             return
 
@@ -740,16 +889,16 @@ async def check_instant_cache(msg: Message, t_id: str, user, create_zip: bool = 
         
         if data and data.get("downloadPercent", 0) >= 100:
             # INSTANT HIT!
-            await send_completion_message(msg, data, t_id, user, create_zip)
+            await send_completion_message(msg, data, t_id, user, create_zip, force_no_zip)
         else:
             # Not cached or still processing
-            TRACKED_TORRENTS[t_id] = {"msg": msg, "user": user, "create_zip": create_zip}
+            TRACKED_TORRENTS[t_id] = {"msg": msg, "user": user, "create_zip": create_zip, "force_no_zip": force_no_zip}
             await msg.edit_text("🌊 Added to Seedbox. Waiting for metadata...")
             
     except Exception as e:
         logger.error(f"Cache check error: {e}")
         # Fallback
-        TRACKED_TORRENTS[t_id] = {"msg": msg, "user": user, "create_zip": create_zip}
+        TRACKED_TORRENTS[t_id] = {"msg": msg, "user": user, "create_zip": create_zip, "force_no_zip": force_no_zip}
         await msg.edit_text("🌊 Added to Seedbox. Waiting for metadata...")
 
 async def monitor_progress():
@@ -778,6 +927,7 @@ async def monitor_progress():
                 msg = torrent_data["msg"]
                 user = torrent_data["user"]
                 create_zip = torrent_data.get("create_zip", False)
+                force_no_zip = torrent_data.get("force_no_zip", False)
                 
                 if t_id not in active_torrents:
                     # Logic to handle removed torrents?
@@ -802,7 +952,7 @@ async def monitor_progress():
                 # Format text
                 if progress >= 100:
                     # Done
-                    await send_completion_message(msg, data, t_id, user, create_zip)
+                    await send_completion_message(msg, data, t_id, user, create_zip, force_no_zip)
                 
                 else:
                     # In Progress - pass cached size
@@ -826,8 +976,8 @@ def get_file_links(files: list) -> str:
     
     count = 0
     for f in files:
-        if count >= 10: # Increased limit slightly
-            links_text += f"\n...and {len(files)-10} more."
+        if count >= 20:  # Increased limit to 20 files
+            links_text += f"\n...and {len(files)-20} more."
             break
             
         if "downloadUrl" in f:
@@ -846,7 +996,7 @@ def get_file_links(files: list) -> str:
         count += 1
     return links_text
 
-async def send_completion_message(msg: Message, data: dict, t_id: str, user, create_zip: bool = False):
+async def send_completion_message(msg: Message, data: dict, t_id: str, user, create_zip: bool = False, force_no_zip: bool = False):
     """Sends the final completion message and stops tracking."""
     name = data.get("name", "Unknown")
     files = data.get("files", [])
@@ -855,8 +1005,8 @@ async def send_completion_message(msg: Message, data: dict, t_id: str, user, cre
     # Calculate total size from all files (API doesn't provide total size at torrent level)
     size = sum(f.get("size", 0) for f in files)
     
-    # Auto-enable ZIP for torrents with 15 or more files
-    if len(files) >= 15:
+    # Auto-enable ZIP for torrents with 15 or more files (unless force_no_zip is set)
+    if len(files) >= 15 and not force_no_zip:
         create_zip = True
         logger.info(f"Auto-enabling ZIP for {name} ({len(files)} files)")
     
@@ -1151,9 +1301,46 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         await callback.answer("❌ An error occurred", show_alert=True)
 
 async def main():
+    # Initialize database
+    logger.info("Initializing database...")
+    from database import init_database
+    await init_database()
+    
+    # Run migration from auth_chats.txt if it exists
+    logger.info("Checking for auth migration...")
+    await auth_service.migrate_from_file()
+    
     async with app:
         # Start health check web server for Render hosting
         await start_web_server()
+        
+        # Check if bot was just restarted
+        import json
+        if os.path.exists(".restart_flag"):
+            try:
+                with open(".restart_flag", "r") as f:
+                    restart_info = json.load(f)
+                
+                # Send success message
+                await app.send_message(
+                    chat_id=restart_info["chat_id"],
+                    text=(
+                        "✅ **Bot Restarted Successfully!**\n\n"
+                        "The bot is now online and ready to use."
+                    ),
+                    reply_to_message_id=restart_info["message_id"]
+                )
+                logger.info("Restart success notification sent")
+                
+                # Remove the flag file
+                os.remove(".restart_flag")
+            except Exception as e:
+                logger.error(f"Failed to send restart confirmation: {e}")
+                # Clean up flag file anyway
+                try:
+                    os.remove(".restart_flag")
+                except:
+                    pass
         
         # Start background task
         asyncio.create_task(monitor_progress())

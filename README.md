@@ -89,6 +89,28 @@ DEBRID_KEY=your_debrid_link_api_key
 ADMIN_IDS=your_telegram_id,another_admin_id
 PORT=8080  # Optional, for health check server
 WORKER_URL=https://your-worker.workers.dev  # Optional, for Cloudflare proxy
+DATABASE_URL=postgresql://user:pass@host:5432/dbname  # Optional, defaults to SQLite
+```
+
+### Database Configuration
+
+The bot uses a database to store authorized chat IDs, ensuring they persist across deployments.
+
+**Local Development:**
+- Uses SQLite by default (stored in `./data/bot.db`)
+- No configuration needed
+- Perfect for testing
+
+**Production on Render:**
+- **Recommended**: Use PostgreSQL for true persistence
+- Add PostgreSQL addon to your Render service
+- Render automatically sets `DATABASE_URL`
+- Authorized chats survive all deployments
+
+**Migration:**
+- Existing `auth_chats.txt` is automatically migrated to database on first startup
+- Original file is backed up as `auth_chats.txt.migrated`
+- Migration only runs once
 ```
 
 ### Getting Credentials
@@ -230,15 +252,18 @@ debrid-bot/
 ├── bot.py                   # Main bot application
 ├── web_server.py            # Health check server (Render support)
 ├── config.py                # Configuration management
+├── models.py                # Database models
+├── database.py              # Database connection manager
 ├── requirements.txt         # Python dependencies
 ├── Dockerfile              # Docker image
 ├── docker-compose.yml      # Docker Compose config
+├── data/                   # SQLite database storage (gitignored)
 ├── cloudflare/             # Cloudflare Workers proxy
 │   ├── worker.js          # Worker script
 │   ├── wrangler.toml      # Worker configuration
 │   └── README.md          # Deployment guide
 ├── services/
-│   ├── auth_service.py    # Authorization system
+│   ├── auth_service.py    # Authorization system (database-backed)
 │   ├── debrid_service.py  # Debrid-Link API client
 │   └── paste_service.py   # Paste service for long outputs
 └── utils/

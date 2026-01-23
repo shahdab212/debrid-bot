@@ -23,6 +23,11 @@ ENV/
 
 # Auth files
 auth_chats.txt
+auth_chats.txt.migrated
+.restart_flag
+
+# Database
+data/
 
 # Logs
 *.log
