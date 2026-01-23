@@ -46,7 +46,7 @@ class DebridService:
     async def add_file(self, file_bytes: bytes) -> Dict[str, Any]:
         data = aiohttp.FormData()
         data.add_field('file', file_bytes, filename='torrent.torrent', content_type='application/x-bittorrent')
-        return await self._request("PUT", "/seedbox/add", data=data)
+        return await self._request("POST", "/seedbox/add", data=data)
 
     async def add_hoster_link(self, link: str) -> Dict[str, Any]:
         return await self._request("POST", "/downloader/add", json={"url": link, "async": False})

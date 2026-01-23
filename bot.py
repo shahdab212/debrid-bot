@@ -24,7 +24,14 @@ from utils import keyboards
 from web_server import start_web_server
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),  # Console output
+        logging.FileHandler('bot.log', mode='a')  # File output
+    ]
+)
 logger = logging.getLogger(__name__)
 
 app = Client(
@@ -43,7 +50,7 @@ async def start_handler(client: Client, message: Message):
     welcome_text = (
         "🎉 **Welcome to Debrid-Link Bot!** 🎉\n\n"
         "🚀 **What I Do:**\n"
-        "I help you download torrents, magnets, and hoster links _fast_ using Debrid-Link!\n\n"
+        "I help you download torrents, magnets, and hoster links __fast__ using Debrid-Link!\n\n"
         "✨ **Quick Start Guide:**\n"
         "• Download directly: /dl **link**\n"
         "• Reply to any link/file with: /dl\n"
@@ -96,7 +103,7 @@ async def help_handler(client: Client, message: Message):
         "• 🧲 **Magnet Links** - Torrents via magnet\n"
         "• 📁 **Torrent Files** - Upload .torrent files\n"
         "• 🔗 **File Hosters** - MEGA, RapidGator, etc.\n"
-        "• ⚠️ _Note: Folder links not supported_\n\n"
+        "• ⚠️ __Note: Folder links not supported__\n\n"
         
         f"{'━' * 32}\n\n"
         "🔒 **ADMIN COMMANDS**\n\n"
@@ -106,7 +113,7 @@ async def help_handler(client: Client, message: Message):
         "▪️ /log **[lines]** • View bot logs\n\n"
         
         f"{'━' * 32}\n\n"
-        "💡 _Fast, reliable downloads powered by Debrid-Link_"
+        "💡 __Fast, reliable downloads powered by Debrid-Link__"
     )
     
     await message.reply_text(
@@ -192,7 +199,13 @@ async def log_handler(client: Client, message: Message):
     
     try:
         if not os.path.exists("bot.log"):
-            await message.reply_text("❌ **No Log File Found**\n\nMake sure the bot is configured to write to `bot.log`.")
+            await message.reply_text(
+                "❌ **No Log File Found**\n\n"
+                "The log file doesn't exist yet. This could mean:\n"
+                "• The bot just started and hasn't logged anything\n"
+                "• Logging isn't configured properly\n\n"
+                "💡 Try running the bot for a while and check again."
+            )
             return
 
         with open("bot.log", "r") as f:
