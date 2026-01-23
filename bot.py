@@ -109,6 +109,7 @@ async def help_handler(client: Client, message: Message):
         "🔒 **ADMIN COMMANDS**\n\n"
         "▪️ /auth **[chat_id]** • Authorize chat\n"
         "▪️ /deauth **[chat_id]** • Revoke access\n"
+        "▪️ /cancel **<torrent_id>** • Cancel download\n"
         "▪️ /limits • View account usage\n"
         "▪️ /log **[lines]** • View bot logs\n\n"
         
@@ -378,6 +379,94 @@ async def limits_handler(client: Client, message: Message):
             f"Error: `{str(e)}`"
         )
 
+@app.on_message(filters.command("cancel"))
+@authorized_only
+async def cancel_handler(client: Client, message: Message):
+    """Cancel an active download (admin only)."""
+    # Check if user is admin
+    if not config.is_admin(message.from_user.id):
+        await message.reply_text(
+            "⛔ **Access Denied**\n\n"
+            "Only bot administrators can cancel downloads."
+        )
+        return
+    
+    # Check if torrent ID was provided
+    if len(message.command) < 2:
+        await message.reply_text(
+            "❌ **Missing Torrent ID**\n\n"
+            "Usage: `/cancel <torrent_id>`\n\n"
+            "💡 **Tip:** The torrent ID is shown in the progress message."
+        )
+        return
+    
+    provided_id = message.command[1]
+    
+    # Find torrent by full ID or last 6 characters
+    torrent_id = None
+    if provided_id in TRACKED_TORRENTS:
+        # Exact match
+        torrent_id = provided_id
+    else:
+        # Try to match by last 6 characters
+        for tid in TRACKED_TORRENTS.keys():
+            if tid.endswith(provided_id):
+                torrent_id = tid
+                break
+    
+    # Check if torrent is being tracked
+    if not torrent_id:
+        await message.reply_text(
+            "⚠️ **Torrent Not Found**\n\n"
+            f"Torrent ID: `{provided_id}`\n\n"
+            "This torrent is not currently being tracked by the bot.\n"
+            "It may have already completed or been cancelled."
+        )
+        return
+    
+    msg = await message.reply_text("⏳ **Cancelling download...**")
+    
+    try:
+        # Get the progress message before removing from tracking
+        progress_msg = TRACKED_TORRENTS[torrent_id].get("msg")
+        
+        # Delete the torrent from Debrid-Link seedbox
+        result = await debrid_service.delete_torrent(torrent_id)
+        
+        # Remove from tracking
+        TRACKED_TORRENTS.pop(torrent_id, None)
+        
+        # Delete the progress message
+        if progress_msg:
+            try:
+                await progress_msg.delete()
+            except Exception as e:
+                logger.error(f"Error deleting progress message: {e}")
+        
+        if result.get("success"):
+            await msg.edit_text(
+                "✅ **Download Cancelled Successfully**\n\n"
+                f"Torrent ID: `{torrent_id}`\n\n"
+                "The download has been stopped and removed from seedbox."
+            )
+        else:
+            error_msg = result.get("error", "Unknown error")
+            await msg.edit_text(
+                "⚠️ **Partial Cancellation**\n\n"
+                f"Torrent ID: `{torrent_id}`\n\n"
+                f"❌ **Server Error:** {error_msg}\n\n"
+                "The torrent has been removed from bot tracking, but may still be on the server.\n"
+                "You may need to manually remove it from Debrid-Link website."
+            )
+    except Exception as e:
+        logger.error(f"Cancel command error: {e}", exc_info=True)
+        await msg.edit_text(
+            f"❌ **Error Cancelling Download**\n\n"
+            f"Torrent ID: `{torrent_id}`\n\n"
+            f"Error: `{str(e)}`"
+        )
+
+
 @app.on_message(filters.command("dl"))
 @authorized_only
 async def dl_handler(client: Client, message: Message):
@@ -565,6 +654,9 @@ async def dl_handler(client: Client, message: Message):
                     user = message.from_user
                     user_mention = f"[{user.first_name}](tg://user?id={user.id})"
                     
+                    # Get file size from response
+                    file_size = data.get("size", 0)
+                    
                     # Proxify the download link for display
                     from utils.url_proxy import encode_url
                     proxied_link = encode_url(dl_link, file_name)
@@ -575,7 +667,8 @@ async def dl_handler(client: Client, message: Message):
                     await sent_msg.edit_text(
                         f"✨ **Download Ready!** ✨\n\n"
                         f"{'━' * 30}\n\n"
-                        f"📂 **Filename:** __{file_name}__\n\n"
+                        f"📂 **Filename:** __{file_name}__\n"
+                        f"📏 **File Size:** {display.human_readable_size(file_size)}\n\n"
                         f"👤 **User:** {user_mention}\n"
                         f"🆔 **User ID:** `{user.id}`\n\n"
                         f"🔗 **Download Link:**\n"
@@ -699,14 +792,21 @@ async def monitor_progress():
                 # Check completion
                 progress = data.get("downloadPercent", 0)
                 
+                # Calculate size from files if not already cached
+                if "cached_size" not in torrent_data:
+                    files = data.get("files", [])
+                    if files:
+                        cached_size = sum(f.get("size", 0) for f in files)
+                        TRACKED_TORRENTS[t_id]["cached_size"] = cached_size
+                
                 # Format text
                 if progress >= 100:
                     # Done
                     await send_completion_message(msg, data, t_id, user, create_zip)
                 
                 else:
-                    # In Progress
-                    await update_progress_message(msg, data, user)
+                    # In Progress - pass cached size
+                    await update_progress_message(msg, data, user, torrent_data.get("cached_size", 0))
 
         except Exception as e:
             logger.error(f"Monitor Loop Error: {e}", exc_info=True)
@@ -751,6 +851,9 @@ async def send_completion_message(msg: Message, data: dict, t_id: str, user, cre
     name = data.get("name", "Unknown")
     files = data.get("files", [])
     logger.info(f"Completion Data for {name}: {files}")
+    
+    # Calculate total size from all files (API doesn't provide total size at torrent level)
+    size = sum(f.get("size", 0) for f in files)
     
     # Auto-enable ZIP for torrents with 15 or more files
     if len(files) >= 15:
@@ -820,7 +923,8 @@ async def send_completion_message(msg: Message, data: dict, t_id: str, user, cre
     final_text = (
         f"✨ **Download Complete!** ✨\n\n"
         f"{'━' * 30}\n\n"
-        f"📦 **File Name:** __{name}__\n\n"
+        f"📦 **File Name:** __{name}__\n"
+        f"📏 **File Size:** {display.human_readable_size(size)}\n\n"
         f"👤 **User:** {user_mention}\n"
         f"🆔 **User ID:** `{user.id}`"
         f"{links_text}"
@@ -837,41 +941,48 @@ async def send_completion_message(msg: Message, data: dict, t_id: str, user, cre
     
     TRACKED_TORRENTS.pop(t_id, None)
 
-async def update_progress_message(msg: Message, data: dict, user):
+async def update_progress_message(msg: Message, data: dict, user, cached_size: int = 0):
     """Updates the progress message."""
     name = data.get("name", "Unknown")
     status = data.get("status", "unknown")
     # Convert status to string if it's not already (API sometimes returns int)
     status = str(status) if not isinstance(status, str) else status
     progress = data.get("downloadPercent", 0)
-    size = data.get("size", 0)
+    # Use cached size if API doesn't provide it
+    size = data.get("size", 0) or cached_size
     t_id = data.get("id", "")
     
     # Calculate downloaded approx
     downloaded_approx = size * (progress / 100)
     speed = data.get("downloadSpeed", 0)
-    eta = data.get("eta", 0)
+    
+    # Calculate ETA: remaining bytes / speed
+    remaining_bytes = size - downloaded_approx
+    if speed > 0 and remaining_bytes > 0:
+        eta = int(remaining_bytes / speed)  # ETA in seconds
+    else:
+        eta = 0
     
     # Create user mention
     user_mention = f"[{user.first_name}](tg://user?id={user.id})"
     
     text = (
-        f"🌊 **Downloading from Seedbox**\n\n"
+        f"🌊 **Downloading**\n\n"
         f"{'─' * 30}\n\n"
-        f"👤 **Requested by:** {user_mention}\n"
-        f"🆔 **User ID:** `{user.id}`\n\n"
-        f"📁 **Name:** `{name}`\n"
-        f"⬇️ **Status:** {status.title()}\n\n"
+        f"📁 **Name:** {name}\n"
+        f"📏 **File Size:** {display.human_readable_size(size)}\n\n\n"
         f"**Progress:**\n"
         f"[{display.progress_bar(progress, 100)}] {display.percentage(progress, 100)}\n\n"
         f"🚀 **Speed:** {display.speed_format(speed)}\n"
-        f"💾 **Downloaded:** {display.human_readable_size(downloaded_approx)} / {display.human_readable_size(size)}\n"
-        f"⏳ **ETA:** {display.human_readable_time(eta)}\n\n"
+        f"♻️ **Downloaded:** {display.human_readable_size(downloaded_approx)} / {display.human_readable_size(size)}\n"
+        f"⏳ **ETA:** {display.human_readable_time(eta)}\n"
+        f"👤 **Task By:** {user_mention}\n"
+        f"📛 **Stop Task:** `/cancel {t_id[-6:]}`\n\n"
         f"{'─' * 30}"
     )
     
-    # Get keyboard based on user permissions
-    keyboard = keyboards.get_progress_keyboard(t_id, msg.chat.id, config.get_admin_list())
+    # No keyboard - users should use /cancel command
+    keyboard = None
     
     try:
         # Only update if text changed to avoid unnecessary API calls

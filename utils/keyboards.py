@@ -19,13 +19,9 @@ def get_help_keyboard() -> InlineKeyboardMarkup:
     ])
 
 def get_progress_keyboard(torrent_id: str, chat_id: int, admin_ids: list) -> InlineKeyboardMarkup:
-    """Returns the keyboard for progress messages (admin only cancel button)."""
-    if chat_id not in admin_ids:
-        return None
-    
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ Cancel Download", callback_data=f"cancel_{torrent_id}")]
-    ])
+    """Returns the keyboard for progress messages (no buttons - use /cancel command instead)."""
+    # No buttons - users should use /cancel command instead
+    return None
 
 def get_cancel_confirm_keyboard(torrent_id: str) -> InlineKeyboardMarkup:
     """Returns the confirmation keyboard for canceling a download."""
