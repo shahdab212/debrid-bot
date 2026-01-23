@@ -812,9 +812,9 @@ async def send_completion_message(msg: Message, data: dict, t_id: str, user, cre
     if zip_url:
         proxied_zip = encode_url(zip_url, f"{name}.zip")
         zip_info = (
-            f"\n\n📦 <b>Archive:</b> <i>Complete ZIP archive ready</i>\n\n"
-            f"🔗 <b>Download Link:</b>\n"
-            f"<code>{proxied_zip}</code>"
+            f"\n\n📦 **Archive:** __Complete ZIP archive ready__\n\n"
+            f"🔗 **Download Link:**\n"
+            f"`{proxied_zip}`"
         )
     
     final_text = (
@@ -830,9 +830,8 @@ async def send_completion_message(msg: Message, data: dict, t_id: str, user, cre
     
     try:
         await msg.delete() # Delete progress message
-        # Use HTML parse mode for ZIP messages to render italics properly
-        parse_mode = enums.ParseMode.HTML if zip_url else None
-        await msg.reply_text(final_text, quote=False, reply_markup=keyboard, parse_mode=parse_mode) # Send new message
+        # Use default Markdown parse mode for consistent formatting
+        await msg.reply_text(final_text, quote=False, reply_markup=keyboard) # Send new message
     except Exception as e:
         logger.error(f"Error sending completion msg: {e}")
     
