@@ -831,7 +831,7 @@ async def send_completion_message(msg: Message, data: dict, t_id: str, user, cre
     try:
         await msg.delete() # Delete progress message
         # Use HTML parse mode for ZIP messages to render italics properly
-        parse_mode = "html" if zip_url else None
+        parse_mode = enums.ParseMode.HTML if zip_url else None
         await msg.reply_text(final_text, quote=False, reply_markup=keyboard, parse_mode=parse_mode) # Send new message
     except Exception as e:
         logger.error(f"Error sending completion msg: {e}")
