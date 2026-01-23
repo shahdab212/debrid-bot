@@ -48,15 +48,26 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False
 )
 
+import asyncio
+
 async def init_database():
-    """Initialize database tables."""
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}", exc_info=True)
-        raise
+    """Initialize database tables with retry logic."""
+    max_retries = 5
+    retry_delay = 5  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("Database initialized successfully")
+            return
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Database initialization failed (Attempt {attempt + 1}/{max_retries}). Retrying in {retry_delay}s... Error: {e}")
+                await asyncio.sleep(retry_delay)
+            else:
+                logger.error(f"Failed to initialize database after {max_retries} attempts: {e}", exc_info=True)
+                raise
 
 async def get_session() -> AsyncSession:
     """Get a database session."""
