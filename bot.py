@@ -565,6 +565,10 @@ async def dl_handler(client: Client, message: Message):
                     user = message.from_user
                     user_mention = f"[{user.first_name}](tg://user?id={user.id})"
                     
+                    # Proxify the download link for display
+                    from utils.url_proxy import encode_url
+                    proxied_link = encode_url(dl_link, file_name)
+                    
                     # Get appropriate keyboard
                     keyboard = keyboards.get_file_download_keyboard(dl_link, file_name)
                     
@@ -575,7 +579,7 @@ async def dl_handler(client: Client, message: Message):
                         f"👤 **User:** {user_mention}\n"
                         f"🆔 **User ID:** `{user.id}`\n\n"
                         f"🔗 **Download Link:**\n"
-                        f"`{dl_link}`\n\n"
+                        f"`{proxied_link}`\n\n"
                         f"{'━' * 30}",
                         reply_markup=keyboard
                     )
@@ -802,10 +806,16 @@ async def send_completion_message(msg: Message, data: dict, t_id: str, user, cre
     # Create user mention
     user_mention = f"[{user.first_name}](tg://user?id={user.id})"
     
-    # Add ZIP info if available
+    # Add ZIP info if available with download link
+    from utils.url_proxy import encode_url
     zip_info = ""
     if zip_url:
-        zip_info = f"\n💾 **Archive:** *ZIP file ready for download*"
+        proxied_zip = encode_url(zip_url, f"{name}.zip")
+        zip_info = (
+            f"\n\n📦 <b>Archive:</b> <i>Complete ZIP archive ready</i>\n\n"
+            f"🔗 <b>Download Link:</b>\n"
+            f"<code>{proxied_zip}</code>"
+        )
     
     final_text = (
         f"✨ **Download Complete!** ✨\n\n"
@@ -820,7 +830,9 @@ async def send_completion_message(msg: Message, data: dict, t_id: str, user, cre
     
     try:
         await msg.delete() # Delete progress message
-        await msg.reply_text(final_text, quote=False, reply_markup=keyboard) # Send new message
+        # Use HTML parse mode for ZIP messages to render italics properly
+        parse_mode = "html" if zip_url else None
+        await msg.reply_text(final_text, quote=False, reply_markup=keyboard, parse_mode=parse_mode) # Send new message
     except Exception as e:
         logger.error(f"Error sending completion msg: {e}")
     
