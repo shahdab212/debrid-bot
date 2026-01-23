@@ -17,9 +17,12 @@ if not DATABASE_URL:
     DATABASE_URL = "sqlite+aiosqlite:///data/bot.db"
     logger.info(f"Using SQLite database: {DATABASE_URL}")
 else:
-    # PostgreSQL support - convert postgres:// to postgresql+asyncpg://
+    # PostgreSQL support - ensure asyncpg driver is used
     if DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif DATABASE_URL.startswith("postgresql://") and "+asyncpg" not in DATABASE_URL:
+        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+    
     logger.info(f"Using PostgreSQL database")
 
 # Create async engine
