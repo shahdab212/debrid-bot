@@ -711,6 +711,8 @@ async def monitor_progress():
 
 def get_file_links(files: list) -> str:
     """Generates formatted links for files, distinguishing streams."""
+    from utils.url_proxy import encode_url
+    
     links_text = ""
     if not files:
         return links_text
@@ -728,12 +730,15 @@ def get_file_links(files: list) -> str:
             name = f['name']
             ext = os.path.splitext(name)[1].lower()
             
+            # Proxify the URL for embedded link
+            proxied_url = encode_url(f['downloadUrl'], name)
+            
             if ext in VIDEO_EXTS:
-                # User asked for "only stream option" for video. 
-                # We provide the direct link labeled as Stream.
-                links_text += f"\n- 🎬 [{name}]({f['downloadUrl']})"
+                # Video file with proxified link
+                links_text += f"\n- 🎬 [{name}]({proxied_url})"
             else:
-                links_text += f"\n- ⬇️ [{name}]({f['downloadUrl']})"
+                # Other files with proxified link
+                links_text += f"\n- ⬇️ [{name}]({proxied_url})"
         count += 1
     return links_text
 
@@ -791,8 +796,8 @@ async def send_completion_message(msg: Message, data: dict, t_id: str, user, cre
     else:
         links_text = get_file_links(files)
     
-    # Get keyboard with file buttons and ZIP link (if available)
-    keyboard = keyboards.get_torrent_files_keyboard(files, zip_url=zip_url)
+    # Get keyboard: only show keyboard if ZIP is available, otherwise None
+    keyboard = keyboards.get_torrent_files_keyboard(files, zip_url=zip_url) if zip_url else None
     
     # Create user mention
     user_mention = f"[{user.first_name}](tg://user?id={user.id})"
@@ -800,7 +805,7 @@ async def send_completion_message(msg: Message, data: dict, t_id: str, user, cre
     # Add ZIP info if available
     zip_info = ""
     if zip_url:
-        zip_info = f"\n💾 **Archive:** _ZIP file ready for download_"
+        zip_info = f"\n💾 **Archive:** *ZIP file ready for download*"
     
     final_text = (
         f"✨ **Download Complete!** ✨\n\n"
