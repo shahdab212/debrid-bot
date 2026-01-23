@@ -52,7 +52,7 @@ import asyncio
 
 async def init_database():
     """Initialize database tables with retry logic."""
-    max_retries = 5
+    max_retries = 12
     retry_delay = 5  # seconds
     
     for attempt in range(max_retries):
