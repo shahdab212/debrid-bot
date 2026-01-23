@@ -687,7 +687,55 @@ async def dl_handler(client: Client, message: Message):
                 )
 
         elif link:
-            if "magnet:" in link:
+            # Check if it's a .torrent file URL
+            if link.lower().endswith('.torrent') or '.torrent?' in link.lower():
+                # Download the .torrent file from URL
+                try:
+                    import aiohttp
+                    status_msg = await sent_msg.edit_text("⏬️ **Downloading .torrent file from URL...**")
+                    
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(link) as response:
+                            if response.status == 200:
+                                file_bytes = await response.read()
+                                await status_msg.edit_text("⬆️ **Uploading .torrent file...**")
+                                
+                                # Upload the downloaded torrent file
+                                resp = await debrid_service.add_file(file_bytes)
+                                if resp.get("success"):
+                                    t_id = resp["value"]["id"]
+                                    await check_instant_cache(sent_msg, t_id, message.from_user, create_zip, force_no_zip)
+                                else:
+                                    error_msg = resp.get('error', 'Unknown error')
+                                    status_code = resp.get('status_code', '')
+                                    
+                                    await sent_msg.edit_text(
+                                        f"⚠️ **Error Adding Torrent File** ⚠️\n\n"
+                                        f"{'─' * 30}\n\n"
+                                        f"❌ **Error:** {error_msg}\n"
+                                        f"{f'🔢 **Status Code:** {status_code}' if status_code else ''}\n\n"
+                                        f"💡 **Suggestions:**\n"
+                                        f"• Verify the .torrent file is valid\n"
+                                        f"• Check your Debrid-Link account status\n\n"
+                                        f"{'─' * 30}"
+                                    )
+                            else:
+                                await sent_msg.edit_text(
+                                    f"❌ **Failed to Download .torrent File**\n\n"
+                                    f"HTTP Status: {response.status}\n\n"
+                                    f"💡 **Suggestions:**\n"
+                                    f"• Verify the URL is accessible\n"
+                                    f"• Check if the link is still valid\n"
+                                    f"• Try uploading the .torrent file directly"
+                                )
+                except Exception as e:
+                    logger.error(f"Error downloading .torrent from URL: {e}", exc_info=True)
+                    await sent_msg.edit_text(
+                        f"❌ **Error Processing .torrent URL**\n\n"
+                        f"Error: `{str(e)}`\n\n"
+                        f"💡 Try uploading the .torrent file directly instead."
+                    )
+            elif "magnet:" in link:
                 # Magnet Link
                 resp = await debrid_service.add_magnet(link)
                 if resp.get("success"):
