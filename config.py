@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import List
+from typing import List, Optional
 
 class Config(BaseSettings):
     API_ID: int
@@ -7,6 +7,7 @@ class Config(BaseSettings):
     BOT_TOKEN: str
     DEBRID_KEY: str
     ADMIN_IDS: str  # Comma-separated admin IDs
+    WORKER_URL: Optional[str] = None  # Cloudflare Worker URL (optional)
 
     class Config:
         env_file = ".env"

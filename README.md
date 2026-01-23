@@ -10,6 +10,7 @@ A production-grade Telegram bot for downloading torrents, magnet links, and host
 - 🎯 **ZIP on Demand**: Add `-zip` or `-z` flag to any download
 - 📊 **Real-time Progress**: Live download progress with speed and ETA
 - 🔗 **Direct Download Links**: Ready-to-use Debrid-Link CDN URLs
+- 🛡️ **Cloudflare Proxy**: Route downloads through Cloudflare Workers (prevents IP bans)
 
 ### User Experience
 - 🎨 **Beautiful UI**: Aesthetic messages with bold/italic styling
@@ -29,6 +30,7 @@ A production-grade Telegram bot for downloading torrents, magnet links, and host
 - 🚀 **Render Support**: Built-in health check endpoint
 - 🐳 **Docker Ready**: Full Docker & Docker Compose support
 - 🌐 **Always Online**: Health check page for uptime monitoring
+- ☁️ **Cloudflare Workers**: Free tier proxy for IP protection (100k req/day)
 
 ## 🚀 Quick Start
 
@@ -86,6 +88,7 @@ BOT_TOKEN=your_bot_token_from_botfather
 DEBRID_KEY=your_debrid_link_api_key
 ADMIN_IDS=your_telegram_id,another_admin_id
 PORT=8080  # Optional, for health check server
+WORKER_URL=https://your-worker.workers.dev  # Optional, for Cloudflare proxy
 ```
 
 ### Getting Credentials
@@ -152,6 +155,74 @@ Torrents with **15 or more files** automatically create ZIP archives, even witho
 
 **Note:** Folder links (MEGA, Google Drive) are automatically detected and rejected with helpful instructions.
 
+## 🛡️ Cloudflare Workers Proxy (Optional)
+
+### Why Use It?
+
+**Problem:** When multiple users download files using different IPs, Debrid-Link may flag or ban your account for sharing.
+
+**Solution:** Route all downloads through a Cloudflare Worker - ensuring all requests come from a single IP.
+
+### Benefits
+
+- ✅ **100% Free** - 100,000 requests/day on free tier
+- ✅ **No Credit Card** - Free tier requires no payment info
+- ✅ **IP Protection** - All Debrid-Link requests from one source
+- ✅ **URL Obfuscation** - Hides actual Debrid-Link URLs from users
+- ✅ **Easy Setup** - 5-minute deployment
+
+### Quick Setup
+
+1. **Create Cloudflare Account** (free)
+   ```bash
+   # Visit: https://dash.cloudflare.com/sign-up
+   ```
+
+2. **Install Wrangler CLI**
+   ```bash
+   npm install -g wrangler
+   wrangler login
+   ```
+
+3. **Deploy Worker**
+   ```bash
+   cd cloudflare
+   wrangler deploy
+   ```
+
+4. **Update Config**
+   Add your worker URL to `.env`:
+   ```env
+   WORKER_URL=https://debrid-proxy.your-subdomain.workers.dev
+   ```
+
+5. **Restart Bot**
+   ```bash
+   python bot.py
+   ```
+
+### Testing
+
+After setup, download links will:
+- Start with your worker domain (not Debrid-Link)
+- Route through Cloudflare's network
+- Show as single IP to Debrid-Link
+
+**Full deployment guide:** See [`cloudflare/README.md`](cloudflare/README.md)
+
+### How It Works
+
+```
+User → Bot → Cloudflare Worker → Debrid-Link
+                    ↓
+                Single IP
+                (No ban risk!)
+```
+
+Without proxy: Each user's IP → Debrid-Link (⚠️ Multi-IP detection)
+
+With proxy: Cloudflare IP → Debrid-Link (✅ Single IP, safe)
+
 ## 🏗️ Project Structure
 
 ```
@@ -162,13 +233,18 @@ debrid-bot/
 ├── requirements.txt         # Python dependencies
 ├── Dockerfile              # Docker image
 ├── docker-compose.yml      # Docker Compose config
+├── cloudflare/             # Cloudflare Workers proxy
+│   ├── worker.js          # Worker script
+│   ├── wrangler.toml      # Worker configuration
+│   └── README.md          # Deployment guide
 ├── services/
 │   ├── auth_service.py    # Authorization system
 │   ├── debrid_service.py  # Debrid-Link API client
 │   └── paste_service.py   # Paste service for long outputs
 └── utils/
     ├── display.py         # Message formatting
-    └── keyboards.py       # Telegram keyboards
+    ├── keyboards.py       # Telegram keyboards
+    └── url_proxy.py       # URL encoding for Cloudflare proxy
 ```
 
 ## 🐛 Troubleshooting

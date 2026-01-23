@@ -1,0 +1,9 @@
+name = "debrid-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Workers Routes
+# The worker will be deployed to: https://<name>.<your-subdomain>.workers.dev
+
+[env.production]
+name = "debrid-proxy"

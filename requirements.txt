@@ -3,3 +3,4 @@ tgcrypto
 aiohttp
 aiofiles
 pydantic-settings
+cryptography
