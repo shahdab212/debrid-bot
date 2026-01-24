@@ -688,7 +688,26 @@ async def dl_handler(client: Client, message: Message):
 
         elif link:
             # Check if it's a .torrent file URL
-            if link.lower().endswith('.torrent') or '.torrent?' in link.lower():
+            # Method 1: Check file extension or query params
+            is_torrent_url = link.lower().endswith('.torrent') or '.torrent?' in link.lower()
+            
+            # Method 2: Check for common torrent download URL patterns
+            torrent_patterns = ['/torrent/download/', '/download/torrent/', '.torrent/', 'download.php?torrent=']
+            if not is_torrent_url:
+                is_torrent_url = any(pattern in link.lower() for pattern in torrent_patterns)
+            
+            # Method 3: If still not detected, check Content-Type header
+            if not is_torrent_url and not link.startswith('magnet:'):
+                try:
+                    import aiohttp
+                    async with aiohttp.ClientSession() as session:
+                        async with session.head(link, allow_redirects=True, timeout=aiohttp.ClientTimeout(total=5)) as response:
+                            content_type = response.headers.get('Content-Type', '').lower()
+                            is_torrent_url = 'torrent' in content_type or content_type == 'application/x-bittorrent'
+                except:
+                    pass  # If HEAD request fails, continue with normal processing
+            
+            if is_torrent_url:
                 # Download the .torrent file from URL
                 try:
                     import aiohttp
