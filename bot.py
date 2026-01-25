@@ -70,10 +70,6 @@ async def main():
     from database import init_database
     await init_database()
     
-    # Run migration from auth_chats.txt if it exists
-    logger.info("Checking for auth migration...")
-    await auth_service.migrate_from_file()
-    
     async with app:
         # Start health check web server for Render hosting
         await start_web_server()

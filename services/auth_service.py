@@ -11,7 +11,6 @@ from models import AuthorizedChat
 
 logger = logging.getLogger(__name__)
 
-AUTH_FILE = "auth_chats.txt"
 
 class AuthService:
     """Service for managing authorized chats using database storage."""
@@ -96,68 +95,6 @@ class AuthService:
             return True
         
         return chat_id in self.auth_chats
-
-    async def migrate_from_file(self):
-        """Migrate authorized chats from text file to database."""
-        if not os.path.exists(AUTH_FILE):
-            logger.info("No auth_chats.txt file found, skipping migration")
-            return
-        
-        logger.info("Starting migration from auth_chats.txt to database")
-        migrated_count = 0
-        
-        try:
-            # Read chat IDs from file
-            chat_ids = []
-            with open(AUTH_FILE, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            chat_ids.append(int(line))
-                        except ValueError:
-                            logger.warning(f"Invalid chat ID in file: {line}")
-            
-            # Get first admin ID for "authorized_by" field
-            admin_ids = config.get_admin_list()
-            default_admin = admin_ids[0] if admin_ids else None
-            
-            # Insert into database
-            async with AsyncSessionLocal() as session:
-                for chat_id in chat_ids:
-                    try:
-                        # Check if already exists
-                        result = await session.execute(
-                            select(AuthorizedChat).filter(AuthorizedChat.chat_id == chat_id)
-                        )
-                        existing = result.scalar_one_or_none()
-                        
-                        if not existing:
-                            new_chat = AuthorizedChat(
-                                chat_id=chat_id,
-                                authorized_by=default_admin
-                            )
-                            session.add(new_chat)
-                            migrated_count += 1
-                    except Exception as e:
-                        logger.error(f"Failed to migrate chat {chat_id}: {e}")
-                
-                await session.commit()
-            
-            # Rename the file to prevent re-migration
-            backup_file = f"{AUTH_FILE}.migrated"
-            os.rename(AUTH_FILE, backup_file)
-            
-            logger.info(f"Migration complete: {migrated_count} chats migrated to database")
-            logger.info(f"Backup saved as: {backup_file}")
-            
-            # Reload cache
-            self._cache_loaded = False
-            await self._load_cache()
-            
-        except Exception as e:
-            logger.error(f"Migration failed: {e}", exc_info=True)
-            raise
 
 # Create global instance
 auth_service = AuthService()

@@ -120,10 +120,6 @@ The bot uses a database to store authorized chat IDs, ensuring they persist acro
 - Render automatically sets `DATABASE_URL`
 - Authorized chats survive all deployments
 
-**Migration:**
-- Existing `auth_chats.txt` is automatically migrated to database on first startup
-- Original file is backed up as `auth_chats.txt.migrated`
-
 ## 📱 Commands
 
 ### User Commands
