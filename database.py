@@ -35,10 +35,23 @@ if DATABASE_URL.startswith("sqlite"):
         echo=False
     )
 else:
-    # PostgreSQL configuration
+    # Create async engine with proper configuration
+    # For Render.com PostgreSQL (uses pgbouncer), disable prepared statements
+    connect_args = {}
+    if DATABASE_URL.startswith("postgresql"):
+        # Disable prepared statements for pgbouncer compatibility
+        connect_args = {
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0
+        }
+    
     engine = create_async_engine(
         DATABASE_URL,
-        echo=False
+        echo=False,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        connect_args=connect_args
     )
 
 # Create session factory
