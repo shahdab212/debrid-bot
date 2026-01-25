@@ -10,7 +10,7 @@ API_BASE = "https://debrid-link.fr/api/v2"
 class DebridService:
     def __init__(self, api_key: str = None):
         from config import config
-        self.api_key = api_key or config.DEBRID_KEY
+        self.api_key = api_key or config.DEBRID_API_KEY
         self.headers = {"Authorization": f"Bearer {self.api_key}"}
         self.session = None
 

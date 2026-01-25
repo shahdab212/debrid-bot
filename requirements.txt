@@ -1,9 +1,11 @@
 https://github.com/Pyrogram/Pyrogram/archive/master.zip
-tgcrypto
+pyrogram
+TgCrypto
 aiohttp
-aiofiles
-pydantic-settings
-cryptography
 sqlalchemy
+asyncpg
 aiosqlite
+pydantic-settings
+pytest
+pytest-asyncio
 asyncpg

@@ -14,6 +14,14 @@ A production-grade Telegram bot for downloading torrents, magnet links, and host
 - 🔗 **Direct Download Links**: Ready-to-use Debrid-Link CDN URLs
 - 🛡️ **Cloudflare Proxy**: Route downloads through Cloudflare Workers (prevents IP bans)
 
+### New Features (v2.0)
+- ⚙️ **Pydantic Configuration**: Type-safe settings with validation
+- ✅ **Input Validators**: Comprehensive validation for all input types
+- 🔄 **Auto-Retry Logic**: Exponential backoff for failed API calls
+- 📈 **Download History**: Track all downloads with full details
+- 📊 **Metrics Collection**: Analytics and usage tracking
+- 📉 **Statistics Dashboard**: Beautiful `/stats` command for admins
+
 ### User Experience
 - 🎨 **Beautiful UI**: Aesthetic messages with bold/italic styling
 - ⬇️ **Smart Buttons**: Download buttons for all file types
@@ -27,6 +35,7 @@ A production-grade Telegram bot for downloading torrents, magnet links, and host
 - 👥 **Multi-admin Support**: Multiple bot administrators
 - 📋 **Admin Logging**: View bot logs with `/log` command
 - 📊 **Account Limits**: Check Debrid-Link usage with `/limits`
+- 📈 **Bot Statistics**: View download stats, success rates with `/stats`
 - 🔄 **Remote Management**: Restart the bot remotely with `/restart`
 - 👥 **User Management**: List all authorized users with `/users`
 
@@ -135,6 +144,7 @@ The bot uses a database to store authorized chat IDs, ensuring they persist acro
 - `/auth [chat_id]` - Authorize a chat (uses current chat if no ID given)
 - `/deauth [chat_id]` - Revoke chat authorization
 - `/users` - List all authorized users/chats
+- `/stats` - View bot statistics (downloads, success rates, data transferred)
 - `/limits` - View Debrid-Link account usage and limits
 - `/log [lines]` - View recent bot logs (default: 60 lines)
 - `/restart` - Restart the bot process
@@ -238,28 +248,53 @@ After setup, download links will:
 
 ```
 debrid-bot/
-├── bot.py                   # Main bot application
+├── bot.py                   # Main bot application (117 lines - modular!)
 ├── web_server.py            # Health check server (Render support)
-├── config.py                # Configuration management
-├── models.py                # Database models
+├── start.sh                 # Convenience start script
+├── models.py                # Database models (AuthorizedChat, DownloadHistory, Metrics)
 ├── database.py              # Database connection manager
 ├── requirements.txt         # Python dependencies
 ├── Dockerfile              # Docker image
 ├── docker-compose.yml      # Docker Compose config
 ├── data/                   # SQLite database storage (gitignored)
-├── cloudflare/             # Cloudflare Workers proxy
-│   ├── worker.js          # Worker script
-│   ├── wrangler.toml      # Worker configuration
-│   └── README.md          # Deployment guide
+├── config/
+│   ├── __init__.py        # Config package
+│   └── settings.py        # Pydantic settings with validation
+├── core/                   # Core business logic
+│   ├── __init__.py
+│   ├── torrent_manager.py # Torrent tracking & monitoring
+│   ├── message_builder.py # Message formatting & updates
+│   └── file_manager.py    # File link generation
+├── handlers/               # Command handlers
+│   ├── __init__.py
+│   ├── user_commands.py   # /start, /help, /dl
+│   ├── admin_commands.py  # /auth, /stats, /cancel, etc.
+│   └── callback_handlers.py # Inline button callbacks
 ├── services/
 │   ├── auth_service.py    # Authorization system (database-backed)
 │   ├── debrid_service.py  # Debrid-Link API client
-│   └── paste_service.py   # Paste service for long outputs
-└── utils/
-    ├── display.py         # Message formatting
-    ├── keyboards.py       # Telegram keyboards
-    └── url_proxy.py       # URL encoding for Cloudflare proxy
+│   ├── paste_service.py   # Paste service for long outputs
+│   ├── history_service.py # Download history tracking
+│   └── metrics_service.py # Metrics collection & analytics
+├── utils/
+│   ├── display.py         # Message formatting
+│   ├── keyboards.py       # Telegram keyboards
+│   ├── url_proxy.py       # URL encoding for Cloudflare proxy
+│   ├── validators.py      # Input validation utilities
+│   └── retry.py          # Retry logic with exponential backoff
+└── cloudflare/             # Cloudflare Workers proxy
+    ├── worker.js          # Worker script
+    ├── wrangler.toml      # Worker configuration
+    └── README.md          # Deployment guide
 ```
+
+### Code Organization Benefits
+
+- **Modular Design**: Clean separation of concerns
+- **Maintainable**: Easy to find and update specific functionality
+- **Testable**: Each module can be tested independently
+- **Scalable**: Simple to add new features without bloating main file
+- **91.8% Smaller**: Main `bot.py` reduced from 1,422 to 117 lines!
 
 ## 🐛 Troubleshooting
 
