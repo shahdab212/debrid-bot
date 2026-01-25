@@ -11,10 +11,9 @@ class AuthorizedChat(Base):
     """Model for authorized chats/users."""
     __tablename__ = "authorized_chats"
     
-    id = Column(Integer, primary_key=True)
-    chat_id = Column(BigInteger, unique=True, nullable=False, index=True)
+    chat_id = Column(BigInteger, primary_key=True, index=True)
     authorized_by = Column(BigInteger, nullable=True)  # Admin who authorized
-    authorized_at = Column(DateTime, default=datetime.utcnow)
+    authorized_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     is_active = Column(Boolean, default=True)
 
 
