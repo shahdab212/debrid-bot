@@ -136,10 +136,16 @@ async def dl_handler(client: Client, message: Message):
     if not link and not file_bytes:
         await message.reply_text(
             "❌ **No Download Source Provided**\n\n"
-            "Please either:\n"
-            "• Send `/dl <link>`\n"
-            "• Reply to a .torrent file with `/dl`\n\n"
-            "💡 Use `/help` for more information."
+            "**Supported Sources:**\n"
+            "🧲 Magnet links\n"
+            "📁 .torrent files (upload or URL)\n"
+            "🔗 File hosters (MEGA, RapidGator, 1fichier, Mediafire, etc.)\n\n"
+            "**Usage Examples:**\n"
+            "• `/dl magnet:?xt=urn:btih:...`\n"
+            "• `/dl https://example.com/file.torrent`\n"
+            "• `/dl https://mega.nz/file/...`\n"
+            "• Reply to any file/link with `/dl`\n\n"
+            "💡 Use `/help` for detailed instructions"
         )
         return
 
