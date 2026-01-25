@@ -14,7 +14,6 @@ class AuthorizedChat(Base):
     chat_id = Column(BigInteger, primary_key=True, index=True)
     authorized_by = Column(BigInteger, nullable=True)  # Admin who authorized
     authorized_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    is_active = Column(Boolean, default=True)
 
 
 class DownloadHistory(Base):
