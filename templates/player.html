@@ -1,20 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Player - {{filename}}</title>
-    
-    <!-- Shaka Player -->
-    <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.7.0/dist/shaka-player.compiled.js"></script>
-    
+    <title>{{filename}}</title>
+
+    <!-- ArtPlayer -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/artplayer@5/dist/artplayer.css">
+    <script src="https://cdn.jsdelivr.net/npm/artplayer@5/dist/artplayer.js"></script>
+
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);
@@ -24,7 +26,7 @@
             flex-direction: column;
             padding: 20px;
         }
-        
+
         .header {
             text-align: center;
             padding: 20px;
@@ -34,195 +36,166 @@
             margin-bottom: 20px;
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         }
-        
+
         h1 {
             font-size: 1.5em;
             margin-bottom: 10px;
             word-break: break-word;
         }
-        
+
         .subtitle {
             color: #a8a8b8;
             font-size: 0.9em;
         }
-        
+
         .player-container {
-            position: relative;
             flex: 1;
             max-width: 1400px;
             width: 100%;
             margin: 0 auto;
-            background: #000;
             border-radius: 15px;
             overflow: hidden;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
         }
-        
-        video {
+
+        #player {
             width: 100%;
-            height: 100%;
+            height: 70vh;
             max-height: 80vh;
-            display: block;
         }
-        
-        .loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-        }
-        
-        .spinner {
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            border-left-color: #667eea;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        .error {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            background: rgba(255, 59, 48, 0.1);
-            padding: 30px;
-            border-radius: 15px;
-            border: 2px solid rgba(255, 59, 48, 0.5);
-            max-width: 500px;
-        }
-        
-        .error h2 {
-            color: #ff3b30;
-            margin-bottom: 15px;
-        }
-        
-        .error p {
-            color: #fff;
-            line-height: 1.6;
-        }
-        
+
         .controls-hint {
             text-align: center;
             padding: 15px;
             color: #a8a8b8;
             font-size: 0.85em;
+            margin-top: 20px;
         }
-        
+
+        .features {
+            text-align: center;
+            padding: 10px;
+            color: #8898aa;
+            font-size: 0.75em;
+        }
+
         @media (max-width: 768px) {
             body {
                 padding: 10px;
             }
-            
+
             h1 {
                 font-size: 1.2em;
             }
-            
-            video {
-                max-height: 60vh;
+
+            #player {
+                height: 50vh;
             }
         }
     </style>
 </head>
+
 <body>
     <div class="header">
-        <h1 id="filename">{{filename}}</h1>
-        <p class="subtitle">Powered by Shaka Player</p>
+        <h1>{{filename}}</h1>
+        <p class="subtitle">Powered by ArtPlayer</p>
     </div>
-    
+
     <div class="player-container">
-        <video id="video" controls autoplay></video>
-        
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p>Loading video...</p>
-        </div>
-        
-        <div class="error" id="error" style="display: none;">
-            <h2>⚠️ Playback Error</h2>
-            <p id="error-message"></p>
-        </div>
+        <div id="player"></div>
     </div>
-    
+
     <div class="controls-hint">
-        💡 Use player controls to adjust quality, speed, and volume
+        💡 Click settings icon for playback speed • Press F for fullscreen • Space to play/pause
     </div>
-    
+
+    <div class="features">
+        Supports: MP4 • MKV • WebM • AVI • MOV • Multiple Audio Tracks • Subtitles
+    </div>
+
     <script>
         const videoUrl = "{{video_url}}";
-        const video = document.getElementById('video');
-        const loading = document.getElementById('loading');
-        const errorDiv = document.getElementById('error');
-        const errorMessage = document.getElementById('error-message');
-        
-        // Initialize Shaka Player
-        async function initPlayer() {
-            // Check if browser supports Shaka Player
-            if (!shaka.Player.isBrowserSupported()) {
-                showError('Your browser is not supported. Please use a modern browser like Chrome, Firefox, or Safari.');
-                return;
-            }
-            
-            const player = new shaka.Player(video);
-            
-            // Configure player for better streaming
-            player.configure({
-                streaming: {
-                    bufferingGoal: 30,
-                    rebufferingGoal: 2,
-                    bufferBehind: 30,
-                    retryParameters: {
-                        timeout: 30000,
-                        maxAttempts: 3,
-                        baseDelay: 1000,
-                        backoffFactor: 2,
-                        fuzzFactor: 0.5
-                    }
-                }
-            });
-            
-            // Listen for errors
-            player.addEventListener('error', (event) => {
-                const error = event.detail;
-                console.error('Shaka Player Error:', error);
-                showError(`Playback failed: ${error.message || 'Unknown error'}`);
-            });
-            
-            // Hide loading spinner when video is ready
-            video.addEventListener('loadeddata', () => {
-                loading.style.display = 'none';
-            });
-            
-            try {
-                // Load the video
-                await player.load(videoUrl);
-                console.log('Video loaded successfully!');
-            } catch (error) {
-                console.error('Error loading video:', error);
-                showError(`Failed to load video: ${error.message || error}`);
-            }
-        }
-        
-        function showError(message) {
-            loading.style.display = 'none';
-            errorDiv.style.display = 'block';
-            errorMessage.textContent = message;
-        }
-        
-        // Initialize when DOM is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initPlayer);
-        } else {
-            initPlayer();
-        }
+        const filename = "{{filename}}";
+
+        // Initialize ArtPlayer
+        const art = new Artplayer({
+            container: '#player',
+            url: videoUrl,
+            title: filename,
+            volume: 0.8,
+            autoplay: false,
+            autoSize: true,
+            autoOrientation: true,
+            fullscreen: true,
+            fullscreenWeb: true,
+            pip: true,
+            screenshot: true,
+            setting: true,
+            playbackRate: true,
+            aspectRatio: true,
+            flip: true,
+            rotate: true,
+            hotkey: true,
+            theme: '#667eea',
+            lang: 'en',
+            moreVideoAttr: {
+                crossOrigin: 'anonymous',
+                preload: 'metadata',
+            },
+            settings: [
+                {
+                    html: 'Playback Speed',
+                    tooltip: '1.0x',
+                    icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2.05v2.02c3.95.49 7 3.85 7 7.93 0 4.08-3.05 7.44-7 7.93v2.02c5.05-.5 9-4.76 9-9.95 0-5.19-3.95-9.45-9-9.95zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>',
+                    selector: [
+                        { html: '0.5x', value: 0.5 },
+                        { html: '0.75x', value: 0.75 },
+                        { html: '1.0x', value: 1.0, default: true },
+                        { html: '1.25x', value: 1.25 },
+                        { html: '1.5x', value: 1.5 },
+                        { html: '2.0x', value: 2.0 },
+                    ],
+                    onSelect: function (item) {
+                        art.playbackRate = item.value;
+                        return item.html;
+                    },
+                },
+            ],
+            icons: {
+                loading: '<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid" class="lds-ring" style="background:0 0"><circle cx="50" cy="50" r="40" stroke="#667eea" fill="none" stroke-width="8" stroke-linecap="round"><animate attributeName="stroke-dashoffset" dur="2s" repeatCount="indefinite" from="0" to="502"/><animate attributeName="stroke-dasharray" dur="2s" repeatCount="indefinite" values="150.6 100.4;1 250;150.6 100.4"/></circle></svg>',
+            },
+        });
+
+        // Error handling
+        art.on('error', (error, reconnect) => {
+            console.error('Player error:', error);
+        });
+
+        // Log events for debugging
+        art.on('ready', () => {
+            console.log('Player ready');
+        });
+
+        art.on('video:loadedmetadata', () => {
+            console.log('Video metadata loaded');
+        });
+
+        art.on('video:canplay', () => {
+            console.log('Video can play');
+        });
+
+        art.on('video:error', () => {
+            console.error('Video playback error');
+        });
+
+        // Keyboard shortcuts info
+        console.log('Keyboard shortcuts:');
+        console.log('Space: Play/Pause');
+        console.log('Arrow Left/Right: Seek');
+        console.log('Arrow Up/Down: Volume');
+        console.log('F: Fullscreen');
+        console.log('M: Mute');
     </script>
 </body>
+
 </html>
