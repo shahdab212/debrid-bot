@@ -79,7 +79,7 @@ async def help_handler(client: Client, message: Message):
         "▪️ /auth **[chat_id]** • Authorize chat\n"
         "▪️ /deauth **[chat_id]** • Revoke access\n"
         "▪️ /users • List authorized users\n"
-        "▪️ /cancel **<torrent_id>** • Cancel download\n"
+        "▪️ /cancel **<torrent_id>** • Cancel own or any download (admin)\n"
         "▪️ /limits • View account usage\n"
         "▪️ /log **[lines]** • View bot logs\n"
         "▪️ /restart • Restart the bot\n\n"
@@ -442,3 +442,47 @@ async def _handle_hoster_link(link, sent_msg, message):
             f"{suggestions}"
             f"{'─' * 30}"
         )
+
+
+
+@authorized_only
+async def status_handler(client: Client, message: Message):
+    """Show current download status for all active torrents."""
+    from core.torrent_manager import TRACKED_TORRENTS
+    from core.message_builder import update_consolidated_status
+    
+    if not TRACKED_TORRENTS:
+        # No active downloads - send friendly message
+        await message.reply_text(
+            "💤 **No Active Downloads**\n\n"
+            "────────────────────────────\n\n"
+            "📊 **Current Status:**\n"
+            "There are no torrents being downloaded at the moment.\n\n"
+            "✨ **Get Started:**\n"
+            "• Use `/dl <link>` to start a download\n"
+            "• Reply to any magnet/torrent with `/dl`\n"
+            "• Add `-zip` flag for archives\n\n"
+            "💡 Tip: Downloads will show here automatically once started!\n\n"
+            "────────────────────────────"
+        )
+        return
+    
+    # Send a temporary message that will be deleted
+    temp_msg = await message.reply_text("📊 Fetching download status...")
+    
+    try:
+        # Delete the temporary message
+        await temp_msg.delete()
+        
+        # Send the consolidated status (force_recreate=True to create fresh message)
+        chat_id = message.chat.id
+        await update_consolidated_status(client, chat_id, force_recreate=True)
+        
+    except Exception as e:
+        logger.error(f"Status command error: {e}", exc_info=True)
+        await message.reply_text(
+            "❌ **Error Fetching Status**\n\n"
+            f"An error occurred: `{str(e)}`\n\n"
+            "Please try again in a moment."
+        )
+

@@ -329,15 +329,7 @@ async def limits_handler(client: Client, message: Message):
 
 @authorized_only
 async def cancel_handler(client: Client, message: Message):
-    """Cancel an active download (admin only)."""
-    # Check if user is admin
-    if not config.is_admin(message.from_user.id):
-        await message.reply_text(
-            "⛔ **Access Denied**\n\n"
-            "Only bot administrators can cancel downloads."
-        )
-        return
-    
+    """Cancel an active download (users can cancel their own, admins can cancel any)."""
     # Check if torrent ID was provided
     if len(message.command) < 2:
         await message.reply_text(
@@ -371,6 +363,20 @@ async def cancel_handler(client: Client, message: Message):
         )
         return
     
+    # Check permissions: user must be admin OR torrent owner
+    torrent_owner = TRACKED_TORRENTS[torrent_id].get("user")
+    is_admin = config.is_admin(message.from_user.id)
+    is_owner = torrent_owner and torrent_owner.id == message.from_user.id
+    
+    if not is_admin and not is_owner:
+        await message.reply_text(
+            "⛔ **Access Denied**\n\n"
+            f"Torrent ID: `{torrent_id}`\n\n"
+            "You can only cancel torrents that you added.\n"
+            "This torrent was added by another user."
+        )
+        return
+    
     msg = await message.reply_text("⏳ **Cancelling download...**")
     
     try:
@@ -382,6 +388,19 @@ async def cancel_handler(client: Client, message: Message):
         
         # Remove from tracking
         TRACKED_TORRENTS.pop(torrent_id, None)
+        
+        # Update status in ALL chats that have status messages
+        from core.message_builder import update_consolidated_status
+        import core.torrent_manager as tm
+        
+        logger.info(f"/cancel command: TRACKED_TORRENTS count after removal: {len(TRACKED_TORRENTS)}")
+        logger.info(f"/cancel command: CONSOLIDATED_STATUS_MESSAGES chats: {list(tm.CONSOLIDATED_STATUS_MESSAGES.keys())}")
+        
+        # Update status for ALL chats that have a status message
+        for chat_id in list(tm.CONSOLIDATED_STATUS_MESSAGES.keys()):
+            logger.info(f"Updating status for chat {chat_id} after /cancel command")
+            # Force recreate to show updated list immediately
+            await update_consolidated_status(client, chat_id, force_recreate=True)
         
         # Delete the progress message
         if progress_msg:
