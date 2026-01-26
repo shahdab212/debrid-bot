@@ -36,6 +36,7 @@ A production-grade Telegram bot for downloading torrents, magnet links, and host
 - 📊 **Account Limits**: Check Debrid-Link usage with `/limits`
 - 🔄 **Remote Management**: Restart the bot remotely with `/restart`
 - 👥 **User Management**: List all authorized users with `/users`
+- ✅ **Smart Cancellation**: Users can cancel their own torrents; admins can cancel any
 
 ### Deployment
 - 🚀 **Render Support**: Built-in health check endpoint
@@ -132,6 +133,7 @@ The bot uses a database to store authorized chat IDs, ensuring they persist acro
 **Info Commands:**
 - `/start` - Welcome message and quick start guide
 - `/help` - Comprehensive help with all commands
+- `/status` - View all active downloads and their progress
 
 ### Admin Commands
 
@@ -141,7 +143,7 @@ The bot uses a database to store authorized chat IDs, ensuring they persist acro
 - `/limits` - View Debrid-Link account usage and limits
 - `/log [lines]` - View recent bot logs (default: 60 lines)
 - `/restart` - Restart the bot process
-- `/cancel` - Cancel an active download (Reply to download message)
+- `/cancel <torrent_id>` - Cancel a download (users can cancel their own, admins can cancel any)
 
 ## 🎯 Usage Examples
 
