@@ -107,8 +107,23 @@ async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str,
     else:
         links_text = get_file_links(files)
     
-    # Get keyboard: only show keyboard if ZIP is available, otherwise None
-    keyboard = keyboards.get_torrent_files_keyboard(files, zip_url=zip_url) if zip_url else None
+    # Get keyboard
+    if zip_url:
+        # ZIP available - show ZIP or files keyboard
+        keyboard = keyboards.get_torrent_files_keyboard(files, zip_url=zip_url)
+    elif len(files) == 1 and files[0].get('downloadUrl'):
+        # Single file - show download/stream keyboard
+        single_file = files[0]
+        keyboard = keyboards.get_file_download_keyboard(
+            single_file['downloadUrl'],
+            single_file.get('name', 'File')
+        )
+    elif len(files) > 1:
+        # Multiple files - show files keyboard (up to 3 files with web stream buttons)
+        keyboard = keyboards.get_torrent_files_keyboard(files, zip_url=None)
+    else:
+        # No files or no download URLs
+        keyboard = None
     
     # Create user mention
     user_mention = f"[{user.first_name}](tg://user?id={user.id})"

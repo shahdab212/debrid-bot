@@ -56,6 +56,9 @@ class BotSettings(BaseSettings):
     # Cloudflare Worker (URL Proxy)
     WORKER_URL: str = Field(default="", description="Cloudflare Worker URL for proxying")
     
+    # Web Server Settings
+    WEB_BASE_URL: str = Field(default="", description="Base URL for web server (auto-detected from RENDER_EXTERNAL_URL if not set)")
+    
     # Feature Flags
     ENABLE_SEARCH: bool = Field(default=True, description="Enable /search command")
     ENABLE_METRICS: bool = Field(default=True, description="Enable metrics collection")

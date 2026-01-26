@@ -34,6 +34,8 @@ def get_cancel_confirm_keyboard(torrent_id: str) -> InlineKeyboardMarkup:
 
 def get_file_download_keyboard(file_url: str, file_name: str) -> InlineKeyboardMarkup:
     """Returns keyboard with download button for files."""
+    from utils.web_stream import get_stream_url, is_web_stream_available
+    
     VIDEO_EXTS = {'.mkv', '.mp4', '.avi', '.mov', '.flv', '.wmv', '.webm', '.m4v', '.mpg', '.mpeg'}
     ext = os.path.splitext(file_name)[1].lower()
     
@@ -43,19 +45,25 @@ def get_file_download_keyboard(file_url: str, file_name: str) -> InlineKeyboardM
     buttons = []
     
     if ext in VIDEO_EXTS:
-        # Video file - add download button
+        # Video file - add web stream button only if publicly accessible
+        if is_web_stream_available():
+            stream_url = get_stream_url(proxied_url, file_name)
+            buttons.append([InlineKeyboardButton("🌐 Web Stream", url=stream_url)])
         buttons.append([InlineKeyboardButton("⬇️ Download Now", url=proxied_url)])
     else:
-        # Non-video file - add download button
+        # Non-video file - add download button only
         buttons.append([InlineKeyboardButton("⬇️ Download Now", url=proxied_url)])
     
     return InlineKeyboardMarkup(buttons)
 
 def get_torrent_files_keyboard(files: list, zip_url: str = None) -> InlineKeyboardMarkup:
     """Returns keyboard with buttons for torrent files and optional ZIP download."""
+    from utils.web_stream import get_stream_url, is_web_stream_available
+    
     VIDEO_EXTS = {'.mkv', '.mp4', '.avi', '.mov', '.flv', '.wmv', '.webm', '.m4v', '.mpg', '.mpeg'}
     
     buttons = []
+    stream_available = is_web_stream_available()
     
     # If ZIP URL provided, show only ZIP button (priority)
     if zip_url:
@@ -75,9 +83,19 @@ def get_torrent_files_keyboard(files: list, zip_url: str = None) -> InlineKeyboa
             # Use proxied URL for each file
             proxied_url = encode_url(file_url, file_name)
             
-            # All files get download button
+            # Shorter display name for buttons
             display_name = file_name[:22] + "..." if len(file_name) > 25 else file_name
-            buttons.append([InlineKeyboardButton(f"⬇️ {display_name}", url=proxied_url)])
+            
+            # For video files, add web stream button if publicly accessible
+            if ext in VIDEO_EXTS and stream_available:
+                row = [
+                    InlineKeyboardButton(f"🌐 {display_name}", url=get_stream_url(proxied_url, file_name)),
+                    InlineKeyboardButton("⬇️", url=proxied_url)
+                ]
+                buttons.append(row)
+            else:
+                # Non-video files or no public URL - download button only
+                buttons.append([InlineKeyboardButton(f"⬇️ {display_name}", url=proxied_url)])
     
     return InlineKeyboardMarkup(buttons) if buttons else None
 
