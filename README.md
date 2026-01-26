@@ -20,7 +20,6 @@ A production-grade Telegram bot for downloading torrents, magnet links, and host
 - 🔄 **Auto-Retry Logic**: Exponential backoff for failed API calls
 - 📈 **Download History**: Track all downloads with full details
 - 📊 **Metrics Collection**: Analytics and usage tracking
-- 📉 **Statistics Dashboard**: Beautiful `/stats` command for admins
 
 ### User Experience
 - 🎨 **Beautiful UI**: Aesthetic messages with bold/italic styling
@@ -35,7 +34,6 @@ A production-grade Telegram bot for downloading torrents, magnet links, and host
 - 👥 **Multi-admin Support**: Multiple bot administrators
 - 📋 **Admin Logging**: View bot logs with `/log` command
 - 📊 **Account Limits**: Check Debrid-Link usage with `/limits`
-- 📈 **Bot Statistics**: View download stats, success rates with `/stats`
 - 🔄 **Remote Management**: Restart the bot remotely with `/restart`
 - 👥 **User Management**: List all authorized users with `/users`
 
@@ -140,7 +138,6 @@ The bot uses a database to store authorized chat IDs, ensuring they persist acro
 - `/auth [chat_id]` - Authorize a chat (uses current chat if no ID given)
 - `/deauth [chat_id]` - Revoke chat authorization
 - `/users` - List all authorized users/chats
-- `/stats` - View bot statistics (downloads, success rates, data transferred)
 - `/limits` - View Debrid-Link account usage and limits
 - `/log [lines]` - View recent bot logs (default: 60 lines)
 - `/restart` - Restart the bot process
@@ -264,7 +261,7 @@ debrid-bot/
 ├── handlers/               # Command handlers
 │   ├── __init__.py
 │   ├── user_commands.py   # /start, /help, /dl
-│   ├── admin_commands.py  # /auth, /stats, /cancel, etc.
+│   ├── admin_commands.py  # /auth, /cancel, etc.
 │   └── callback_handlers.py # Inline button callbacks
 ├── services/
 │   ├── auth_service.py    # Authorization system (database-backed)

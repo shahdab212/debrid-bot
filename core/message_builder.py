@@ -15,7 +15,7 @@ from .file_manager import get_file_links
 logger = logging.getLogger(__name__)
 
 
-async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str, user, create_zip: bool = False, force_no_zip: bool = False):
+async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str, user, create_zip: bool = False, force_no_zip: bool = False, start_time: float = None):
     """Sends the final completion message and stops tracking."""
     name = data.get("name", "Unknown")
     files = data.get("files", [])
@@ -33,7 +33,7 @@ async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str,
     zip_url = None
     if create_zip and len(files) > 1:
         try:
-            status = await msg.edit_text("📦 Creating ZIP archive...")
+            await msg.edit_text("📦 Creating ZIP archive...")
             
             # Extract all file IDs
             file_ids = [f['id'] for f in files if 'id' in f]
@@ -43,17 +43,52 @@ async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str,
                 logger.info(f"ZIP API Raw Response: {zip_resp}")
                 
                 if zip_resp.get("success"):
-                    # Check different possible locations for the link
                     val = zip_resp.get("value", {})
-                    if isinstance(val, str):
-                        zip_url = val
-                    elif isinstance(val, dict):
-                        zip_url = val.get("link") or val.get("url") or val.get("downloadUrl")
                     
-                    if zip_url:
-                        logger.info(f"Found ZIP URL: {zip_url}")
-                    else:
-                        logger.warning(f"ZIP success but no link found in value: {val}")
+                    # Check if ZIP is ready immediately or needs polling
+                    if isinstance(val, dict):
+                        zip_status = val.get("status", "")
+                        zip_url = val.get("link") or val.get("url") or val.get("downloadUrl")
+                        
+                        # If status is 'create', ZIP is being created asynchronously - poll for it
+                        if zip_status == "create" and not zip_url:
+                            logger.info(f"ZIP creation started, polling for completion...")
+                            
+                            # Poll for ZIP completion (max 30 attempts = ~60 seconds)
+                            max_attempts = 30
+                            poll_interval = 2  # seconds
+                            
+                            for attempt in range(1, max_attempts + 1):
+                                await asyncio.sleep(poll_interval)
+                                
+                                # Check ZIP status (silently, no message updates)
+                                status_resp = await debrid_service.get_zip_status(t_id)
+                                logger.info(f"ZIP Status Poll #{attempt}: {status_resp}")
+                                
+                                if status_resp.get("success"):
+                                    status_val = status_resp.get("value", {})
+                                    if isinstance(status_val, dict):
+                                        zip_url = status_val.get("link") or status_val.get("url") or status_val.get("downloadUrl")
+                                        current_status = status_val.get("status", "")
+                                        
+                                        if zip_url:
+                                            logger.info(f"ZIP ready after {attempt} attempts: {zip_url}")
+                                            break
+                                        elif current_status not in ["create", "processing", ""]:
+                                            # Unexpected status
+                                            logger.warning(f"Unexpected ZIP status: {current_status}")
+                                            break
+                            else:
+                                # Timeout reached
+                                logger.warning(f"ZIP creation timeout after {max_attempts} attempts")
+                        
+                        elif zip_url:
+                            logger.info(f"ZIP ready immediately: {zip_url}")
+                    elif isinstance(val, str):
+                        zip_url = val
+                    
+                    if not zip_url:
+                        logger.warning(f"ZIP creation completed but no download URL found")
                 else:
                     logger.error(f"ZIP creation failed: {zip_resp}")
             else:
@@ -78,6 +113,13 @@ async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str,
     # Create user mention
     user_mention = f"[{user.first_name}](tg://user?id={user.id})"
     
+    # Calculate time taken
+    import time
+    time_taken_text = ""
+    if start_time:
+        elapsed_seconds = time.time() - start_time
+        time_taken_text = f"\n⏱️ **Time Taken:** {display.human_readable_time(int(elapsed_seconds))}"
+    
     # Add ZIP info if available with download link
     from utils.url_proxy import encode_url
     zip_info = ""
@@ -93,7 +135,8 @@ async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str,
         f"✨ **Download Complete!** ✨\n\n"
         f"{'━' * 30}\n\n"
         f"📦 **File Name:** __{name}__\n"
-        f"📏 **File Size:** {display.human_readable_size(size)}\n\n"
+        f"📏 **File Size:** {display.human_readable_size(size)}"
+        f"{time_taken_text}\n\n"
         f"👤 **User:** {user_mention}\n"
         f"🆔 **User ID:** `{user.id}`"
         f"{links_text}"

@@ -74,6 +74,18 @@ class DebridService:
         
         return await self._request("POST", f"/seedbox/{torrent_id}/zip", json={"ids": ids_str})
 
+    async def get_zip_status(self, torrent_id: str) -> Dict[str, Any]:
+        """
+        Get the status of a ZIP archive being created
+        
+        Args:
+            torrent_id: The torrent ID
+            
+        Returns:
+            Response with ZIP status and download link when ready
+        """
+        return await self._request("GET", f"/seedbox/{torrent_id}/zip")
+
     async def get_limits(self) -> Dict[str, Any]:
         """
         Get account limits and usage statistics

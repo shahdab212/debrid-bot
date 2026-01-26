@@ -40,7 +40,7 @@ app = Client(
 from handlers.user_commands import start_handler, help_handler, dl_handler
 from handlers.admin_commands import (
     auth_handler, deauth_handler, log_handler, users_handler,
-    restart_handler, limits_handler, cancel_handler, stats_handler
+    restart_handler, limits_handler, cancel_handler
 )
 from handlers.callback_handlers import callback_handler
 
@@ -57,7 +57,6 @@ app.on_message(filters.command("users"))(users_handler)
 app.on_message(filters.command("restart"))(restart_handler)
 app.on_message(filters.command("limits"))(limits_handler)
 app.on_message(filters.command("cancel"))(cancel_handler)
-app.on_message(filters.command("stats"))(stats_handler)
 
 # Register callback query handler
 app.on_callback_query()(callback_handler)

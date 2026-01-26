@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from typing import Dict, Any
 
 from pyrogram.types import Message
@@ -26,7 +27,7 @@ async def check_instant_cache(msg: Message, t_id: str, user, create_zip: bool = 
         response = await debrid_service.get_seedbox_torrents()
         if not response.get("success"):
             # Fallback to monitoring
-            TRACKED_TORRENTS[t_id] = {"msg": msg, "user": user, "create_zip": create_zip, "force_no_zip": force_no_zip}
+            TRACKED_TORRENTS[t_id] = {"msg": msg, "user": user, "create_zip": create_zip, "force_no_zip": force_no_zip, "start_time": time.time()}
             await msg.edit_text("🌊 Added to Seedbox. Waiting for metadata...")
             return
 
@@ -35,16 +36,16 @@ async def check_instant_cache(msg: Message, t_id: str, user, create_zip: bool = 
         
         if data and data.get("downloadPercent", 0) >= 100:
             # INSTANT HIT!
-            await send_completion_message(msg, data, t_id, user, create_zip, force_no_zip)
+            await send_completion_message(msg, data, t_id, user, create_zip, force_no_zip, start_time=time.time())
         else:
             # Not cached or still processing
-            TRACKED_TORRENTS[t_id] = {"msg": msg, "user": user, "create_zip": create_zip, "force_no_zip": force_no_zip}
+            TRACKED_TORRENTS[t_id] = {"msg": msg, "user": user, "create_zip": create_zip, "force_no_zip": force_no_zip, "start_time": time.time()}
             await msg.edit_text("🌊 Added to Seedbox. Waiting for metadata...")
             
     except Exception as e:
         logger.error(f"Cache check error: {e}")
         # Fallback
-        TRACKED_TORRENTS[t_id] = {"msg": msg, "user": user, "create_zip": create_zip, "force_no_zip": force_no_zip}
+        TRACKED_TORRENTS[t_id] = {"msg": msg, "user": user, "create_zip": create_zip, "force_no_zip": force_no_zip, "start_time": time.time()}
         await msg.edit_text("🌊 Added to Seedbox. Waiting for metadata...")
 
 
@@ -101,7 +102,8 @@ async def monitor_progress():
                 # Format text
                 if progress >= 100:
                     # Done
-                    await send_completion_message(msg, data, t_id, user, create_zip, force_no_zip)
+                    start_time = torrent_data.get("start_time", time.time())
+                    await send_completion_message(msg, data, t_id, user, create_zip, force_no_zip, start_time)
                 
                 else:
                     # In Progress - pass cached size
