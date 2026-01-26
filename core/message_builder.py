@@ -154,57 +154,200 @@ async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str,
     TRACKED_TORRENTS.pop(t_id, None)
 
 
-async def update_progress_message(msg: Message, data: Dict[str, Any], user, cached_size: int = 0):
-    """Updates the progress message."""
-    name = data.get("name", "Unknown")
-    status = data.get("status", "unknown")
-    # Convert status to string if it's not already (API sometimes returns int)
-    status = str(status) if not isinstance(status, str) else status
-    progress = data.get("downloadPercent", 0)
-    # Use cached size if API doesn't provide it
-    size = data.get("size", 0) or cached_size
-    t_id = data.get("id", "")
+
+
+async def update_consolidated_status(client, chat_id: int, force_recreate: bool = False):
+    """Updates the consolidated status message showing all active downloads.
     
-    # Calculate downloaded approx
-    downloaded_approx = size * (progress / 100)
-    speed = data.get("downloadSpeed", 0)
+    Args:
+        client: Pyrogram client instance
+        chat_id: Chat ID where status message should be sent/updated
+        force_recreate: If True, delete old message and create new one. If False, edit existing.
+    """
+    from .torrent_manager import TRACKED_TORRENTS, CONSOLIDATED_STATUS_MESSAGES, STATUS_CURRENT_PAGE
+    import core.torrent_manager as tm
+    from utils import keyboards
     
-    # Calculate ETA: remaining bytes / speed
-    remaining_bytes = size - downloaded_approx
-    if speed > 0 and remaining_bytes > 0:
-        eta = int(remaining_bytes / speed)  # ETA in seconds
-    else:
-        eta = 0
+    # If no active torrents, delete status message from ALL chats
+    if not TRACKED_TORRENTS:
+        # Delete from ALL chats that have status messages, not just the one passed as parameter
+        for chat_id_to_clean in list(CONSOLIDATED_STATUS_MESSAGES.keys()):
+            try:
+                await CONSOLIDATED_STATUS_MESSAGES[chat_id_to_clean].delete()
+                logger.info(f"Deleted consolidated status message for chat {chat_id_to_clean} (no active downloads)")
+            except Exception as e:
+                logger.error(f"Error deleting consolidated status message for chat {chat_id_to_clean}: {e}")
+            del tm.CONSOLIDATED_STATUS_MESSAGES[chat_id_to_clean]
+        
+        # Reset page and count when no downloads
+        tm.STATUS_CURRENT_PAGE = 0
+        tm.PREVIOUS_DOWNLOAD_COUNT = 0
+        return
     
-    # Create user mention
-    user_mention = f"[{user.first_name}](tg://user?id={user.id})"
-    
-    text = (
-        f"🌊 **Downloading**\n\n"
-        f"{'─' * 30}\n\n"
-        f"📁 **Name:** {name}\n"
-        f"📏 **File Size:** {display.human_readable_size(size)}\n\n\n"
-        f"**Progress:**\n"
-        f"[{display.progress_bar(progress, 100)}] {display.percentage(progress, 100)}\n\n"
-        f"🚀 **Speed:** {display.speed_format(speed)}\n"
-        f"♻️ **Downloaded:** {display.human_readable_size(downloaded_approx)} / {display.human_readable_size(size)}\n"
-        f"⏳ **ETA:** {display.human_readable_time(eta)}\n"
-        f"👤 **Task By:** {user_mention}\n"
-        f"📛 **Stop Task:** `/cancel {t_id[-6:]}`\n\n"
-        f"{'─' * 30}"
-    )
-    
-    # No keyboard - users should use /cancel command
-    keyboard = None
-    
+    # Get all active torrents from Debrid-Link
     try:
-        # Only update if text changed to avoid unnecessary API calls
-        current_text = msg.text or ""
-        if current_text.split("\n━━━━━━━━━━━━━━━━━━━━")[0] != text.split("\n━━━━━━━━━━━━━━━━━━━━")[0]:
-            await msg.edit_text(text, reply_markup=keyboard)
+        response = await debrid_service.get_seedbox_torrents()
+        if not response.get("success"):
+            logger.error("Failed to get torrent list for consolidated status")
+            return
+        
+        active_list = response.get("value", [])
+        active_torrents = {t["id"]: t for t in active_list}
+    except Exception as e:
+        logger.error(f"Error fetching torrents for status: {e}")
+        return
+    
+    # Build list of download entries
+    download_entries = []
+    
+    for t_id, torrent_data in TRACKED_TORRENTS.items():
+        if t_id not in active_torrents:
+            continue
+        
+        data = active_torrents[t_id]
+        user = torrent_data["user"]
+        
+        name = data.get("name", "Unknown")
+        progress = data.get("downloadPercent", 0)
+        
+        # Calculate size
+        if "cached_size" in torrent_data:
+            size = torrent_data["cached_size"]
+        else:
+            files = data.get("files", [])
+            if files:
+                size = sum(f.get("size", 0) for f in files)
+                torrent_data["cached_size"] = size
+            else:
+                size = 0
+        
+        # Calculate downloaded and speed
+        downloaded_approx = size * (progress / 100)
+        speed = data.get("downloadSpeed", 0)
+        
+        # Calculate ETA
+        remaining_bytes = size - downloaded_approx
+        if speed > 0 and remaining_bytes > 0:
+            eta = int(remaining_bytes / speed)
+        else:
+            eta = 0
+        
+        # Create user mention
+        user_mention = f"[{user.first_name}](tg://user?id={user.id})"
+        
+        download_entries.append({
+            "name": name,
+            "size": size,
+            "progress": progress,
+            "speed": speed,
+            "downloaded": downloaded_approx,
+            "eta": eta,
+            "user_mention": user_mention,
+            "torrent_id": t_id
+        })
+    
+    # If no entries, delete status from ALL chats
+    if not download_entries:
+        # Clean up ALL status messages when no downloads remain
+        for chat_id_to_clean in list(CONSOLIDATED_STATUS_MESSAGES.keys()):
+            try:
+                await CONSOLIDATED_STATUS_MESSAGES[chat_id_to_clean].delete()
+                logger.info(f"Deleted empty status message for chat {chat_id_to_clean}")
+            except Exception as e:
+                logger.error(f"Error deleting empty status message for chat {chat_id_to_clean}: {e}")
+            del tm.CONSOLIDATED_STATUS_MESSAGES[chat_id_to_clean]
+        return
+    
+    # Pagination: configurable items per page
+    from config import config
+    ITEMS_PER_PAGE = config.STATUS_ITEMS_PER_PAGE
+    total_pages = (len(download_entries) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE
+
+    
+    # Ensure current page is valid (important after downloads complete/cancel)
+    current_page = min(STATUS_CURRENT_PAGE, total_pages - 1)
+    if current_page < 0:
+        current_page = 0
+    
+    # Update global if we had to adjust
+    if current_page != STATUS_CURRENT_PAGE:
+        tm.STATUS_CURRENT_PAGE = current_page
+        logger.info(f"Adjusted page from {STATUS_CURRENT_PAGE} to {current_page} (total_pages: {total_pages})")
+
+    
+    # Get entries for current page
+    start_idx = current_page * ITEMS_PER_PAGE
+    end_idx = min(start_idx + ITEMS_PER_PAGE, len(download_entries))
+    page_entries = download_entries[start_idx:end_idx]
+    
+    # Build message text
+    text_parts = [
+        "🌊 **Downloading**\n",
+        f"{'─' * 30}\n"
+    ]
+    
+    for idx, entry in enumerate(page_entries, start=start_idx + 1):
+        text_parts.append(f"\n**{idx}.**\n")
+        text_parts.append(f"📁 **Name:** {entry['name']}\n")
+        text_parts.append(f"📏 **File Size:** {display.human_readable_size(entry['size'])}\n\n")
+        text_parts.append(f"**Progress:**\n")
+        text_parts.append(f"[{display.progress_bar(entry['progress'], 100)}] {display.percentage(entry['progress'], 100)}\n\n")
+        text_parts.append(f"🚀 **Speed:** {display.speed_format(entry['speed'])}\n")
+        text_parts.append(f"♻️ **Downloaded:** {display.human_readable_size(entry['downloaded'])} / {display.human_readable_size(entry['size'])}\n")
+        text_parts.append(f"⏳ **ETA:** {display.human_readable_time(entry['eta'])}\n")
+        text_parts.append(f"👤 **Task By:** {entry['user_mention']}\n")
+        text_parts.append(f"📛 **Stop Task:** `/cancel {entry['torrent_id'][-6:]}`\n")
+    
+    text_parts.append(f"\n{'─' * 30}")
+    
+    text = "".join(text_parts)
+    
+    # Get pagination keyboard
+    keyboard = keyboards.get_status_pagination_keyboard(current_page, total_pages)
+    
+    # Send or update message for this chat
+    try:
+        if chat_id in CONSOLIDATED_STATUS_MESSAGES:
+            # Message exists for this chat
+            if force_recreate:
+                # Only force recreate if the text content is fundamentally different
+                # (e.g., different page structure or major changes)
+                # For most count changes, just edit the existing message
+                try:
+                    await CONSOLIDATED_STATUS_MESSAGES[chat_id].edit_text(text, reply_markup=keyboard)
+                except MessageNotModified:
+                    pass
+                except Exception as e:
+                    # If edit fails, try delete and recreate as fallback
+                    logger.debug(f"Could not edit status message for chat {chat_id}, recreating: {e}")
+                    try:
+                        await CONSOLIDATED_STATUS_MESSAGES[chat_id].delete()
+                    except Exception:
+                        pass
+                    
+                    tm.CONSOLIDATED_STATUS_MESSAGES[chat_id] = await client.send_message(
+                        chat_id=chat_id,
+                        text=text,
+                        reply_markup=keyboard
+                    )
+            else:
+                # Edit existing message for smooth updates
+                try:
+                    await CONSOLIDATED_STATUS_MESSAGES[chat_id].edit_text(text, reply_markup=keyboard)
+                except MessageNotModified:
+                    pass
+                except Exception as e:
+                    logger.debug(f"Could not edit status message for chat {chat_id}: {e}")
+        else:
+            # Create new message (first time for this chat)
+            tm.CONSOLIDATED_STATUS_MESSAGES[chat_id] = await client.send_message(
+                chat_id=chat_id,
+                text=text,
+                reply_markup=keyboard
+            )
     except FloodWait as e:
         await asyncio.sleep(e.value)
-    except MessageNotModified:
-        pass
     except Exception as e:
-        logger.error(f"Error editing message: {e}")
+        logger.error(f"Error sending consolidated status for chat {chat_id}: {e}")
+
+

@@ -80,3 +80,35 @@ def get_torrent_files_keyboard(files: list, zip_url: str = None) -> InlineKeyboa
             buttons.append([InlineKeyboardButton(f"⬇️ {display_name}", url=proxied_url)])
     
     return InlineKeyboardMarkup(buttons) if buttons else None
+
+def get_status_pagination_keyboard(current_page: int, total_pages: int) -> InlineKeyboardMarkup:
+    """Returns pagination keyboard for consolidated status messages.
+    
+    Args:
+        current_page: Current page number (0-indexed)
+        total_pages: Total number of pages
+        
+    Returns:
+        InlineKeyboardMarkup with Previous/Next buttons, or None if only one page
+    """
+    if total_pages <= 1:
+        return None
+    
+    buttons = []
+    row = []
+    
+    # Add Previous button if not on first page
+    if current_page > 0:
+        row.append(InlineKeyboardButton("◀️ Previous", callback_data="status_prev"))
+    
+    # Add page indicator
+    row.append(InlineKeyboardButton(f"📄 {current_page + 1}/{total_pages}", callback_data="status_page_info"))
+    
+    # Add Next button if not on last page
+    if current_page < total_pages - 1:
+        row.append(InlineKeyboardButton("Next ▶️", callback_data="status_next"))
+    
+    if row:
+        buttons.append(row)
+    
+    return InlineKeyboardMarkup(buttons) if buttons else None

@@ -132,6 +132,20 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             # Remove from tracking
             TRACKED_TORRENTS.pop(torrent_id, None)
             
+            # Immediately update the consolidated status message in ALL chats
+            # This ensures the cancelled torrent is removed from everyone's view
+            from core.message_builder import update_consolidated_status
+            import core.torrent_manager as tm
+            
+            logger.info(f"Cancellation: TRACKED_TORRENTS count after removal: {len(TRACKED_TORRENTS)}")
+            logger.info(f"Cancellation: CONSOLIDATED_STATUS_MESSAGES chats: {list(tm.CONSOLIDATED_STATUS_MESSAGES.keys())}")
+            
+            # Update status for ALL chats that have a status message
+            for chat_id in list(tm.CONSOLIDATED_STATUS_MESSAGES.keys()):
+                logger.info(f"Updating status for chat {chat_id} after cancellation")
+                # Force recreate to show updated list immediately
+                await update_consolidated_status(client, chat_id, force_recreate=True)
+            
             if result.get("success"):
                 await callback.message.edit_text(
                     "✅ **Download Cancelled**\n\n"
@@ -155,6 +169,36 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             # Restore the progress message if possible
             # For now, just dismiss the confirmation
             await callback.message.delete()
+        
+        # Status pagination - Next button
+        elif data == "status_next":
+            import core.torrent_manager as tm
+            from core.message_builder import update_consolidated_status
+            
+            # Increment page
+            tm.STATUS_CURRENT_PAGE += 1
+            
+            # Update the consolidated status message
+            chat_id = callback.message.chat.id
+            await update_consolidated_status(client, chat_id)
+            await callback.answer("➡️ Next page")
+        
+        # Status pagination - Previous button
+        elif data == "status_prev":
+            import core.torrent_manager as tm
+            from core.message_builder import update_consolidated_status
+            
+            # Decrement page
+            tm.STATUS_CURRENT_PAGE = max(0, tm.STATUS_CURRENT_PAGE - 1)
+            
+            # Update the consolidated status message
+            chat_id = callback.message.chat.id
+            await update_consolidated_status(client, chat_id)
+            await callback.answer("⬅️ Previous page")
+        
+        # Status page info button (just informational)
+        elif data == "status_page_info":
+            await callback.answer("📄 Page indicator", show_alert=False)
         
         else:
             await callback.answer("❓ Unknown action")

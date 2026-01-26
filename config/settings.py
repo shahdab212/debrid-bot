@@ -36,6 +36,8 @@ class BotSettings(BaseSettings):
     
     # Progress Monitoring
     PROGRESS_UPDATE_INTERVAL: int = Field(default=5, description="Seconds between progress updates")
+    STATUS_ITEMS_PER_PAGE: int = Field(default=5, description="Number of downloads to show per page in status message")
+
     
     # Logging Settings
     LOG_LEVEL: str = Field(default="INFO", description="Logging level")
