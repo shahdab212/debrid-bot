@@ -35,6 +35,13 @@ app = Client(
     bot_token=config.BOT_TOKEN
 )
 
+# Custom filter to accept both / and . command prefixes
+def dual_prefix_command(commands):
+    """Filter that accepts both / and . as command prefixes"""
+    if isinstance(commands, str):
+        commands = [commands]
+    return (filters.command(commands, prefixes="/") | filters.command(commands, prefixes="."))
+
 
 # Import and register all handlers
 from handlers.user_commands import start_handler, help_handler, dl_handler
@@ -45,18 +52,18 @@ from handlers.admin_commands import (
 from handlers.callback_handlers import callback_handler
 
 # Register user command handlers
-app.on_message(filters.command("start"))(start_handler)
-app.on_message(filters.command("help"))(help_handler)
-app.on_message(filters.command("dl"))(dl_handler)
+app.on_message(dual_prefix_command("start"))(start_handler)
+app.on_message(dual_prefix_command("help"))(help_handler)
+app.on_message(dual_prefix_command("dl"))(dl_handler)
 
 # Register admin command handlers
-app.on_message(filters.command("auth"))(auth_handler)
-app.on_message(filters.command("deauth"))(deauth_handler)
-app.on_message(filters.command("log"))(log_handler)
-app.on_message(filters.command("users"))(users_handler)
-app.on_message(filters.command("restart"))(restart_handler)
-app.on_message(filters.command("limits"))(limits_handler)
-app.on_message(filters.command("cancel"))(cancel_handler)
+app.on_message(dual_prefix_command("auth"))(auth_handler)
+app.on_message(dual_prefix_command("deauth"))(deauth_handler)
+app.on_message(dual_prefix_command("log"))(log_handler)
+app.on_message(dual_prefix_command("users"))(users_handler)
+app.on_message(dual_prefix_command("restart"))(restart_handler)
+app.on_message(dual_prefix_command("limits"))(limits_handler)
+app.on_message(dual_prefix_command("cancel"))(cancel_handler)
 
 # Register callback query handler
 app.on_callback_query()(callback_handler)
