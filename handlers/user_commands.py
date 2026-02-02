@@ -435,54 +435,17 @@ async def _handle_hoster_link(link, sent_msg, message):
             )
         
         await sent_msg.edit_text(
-            f"⚠️ **Error Processing Link** ⚠️\n\n"
-            f"{'─' * 30}\n\n"
-            f"❌ **Error:** {error_msg}\n"
-            f"{f'🔢 **Status Code:** {status_code}' if status_code else ''}\n\n"
-            f"{suggestions}"
-            f"{'─' * 30}"
+            f"❌ **Unable to Process Link**\n\n"
+            f"The link could not be added to your seedbox.\n\n"
+            f"**Possible reasons:**\n"
+            f"• The Debrid-Link server may be temporarily down\n"
+            f"• The link format may not be supported\n"
+            f"• Your account quota may be exceeded\n\n"
+            f"💡 **Please try again in a few moments.**"
         )
 
 
 
-@authorized_only
-async def status_handler(client: Client, message: Message):
-    """Show current download status for all active torrents."""
-    from core.torrent_manager import TRACKED_TORRENTS
-    from core.message_builder import update_consolidated_status
-    
-    if not TRACKED_TORRENTS:
-        # No active downloads - send friendly message
-        await message.reply_text(
-            "💤 **No Active Downloads**\n\n"
-            "────────────────────────────\n\n"
-            "📊 **Current Status:**\n"
-            "There are no torrents being downloaded at the moment.\n\n"
-            "✨ **Get Started:**\n"
-            "• Use `/dl <link>` to start a download\n"
-            "• Reply to any magnet/torrent with `/dl`\n"
-            "• Add `-zip` flag for archives\n\n"
-            "💡 Tip: Downloads will show here automatically once started!\n\n"
-            "────────────────────────────"
-        )
-        return
-    
-    # Send a temporary message that will be deleted
-    temp_msg = await message.reply_text("📊 Fetching download status...")
-    
-    try:
-        # Delete the temporary message
-        await temp_msg.delete()
-        
-        # Send the consolidated status (force_recreate=True to create fresh message)
-        chat_id = message.chat.id
-        await update_consolidated_status(client, chat_id, force_recreate=True)
-        
-    except Exception as e:
-        logger.error(f"Status command error: {e}", exc_info=True)
-        await message.reply_text(
-            "❌ **Error Fetching Status**\n\n"
-            f"An error occurred: `{str(e)}`\n\n"
-            "Please try again in a moment."
-        )
+# NOTE: status_handler has been moved to handlers/user_commands_status.py
+# and now uses the centralized status_tracker module
 

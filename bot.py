@@ -44,7 +44,8 @@ def dual_prefix_command(commands):
 
 
 # Import and register all handlers
-from handlers.user_commands import start_handler, help_handler, dl_handler, status_handler
+from handlers.user_commands import start_handler, help_handler, dl_handler
+from handlers.user_commands_status import status_handler
 from handlers.admin_commands import (
     auth_handler, deauth_handler, log_handler, users_handler,
     restart_handler, limits_handler, cancel_handler

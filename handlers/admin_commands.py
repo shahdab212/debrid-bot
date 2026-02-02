@@ -390,17 +390,16 @@ async def cancel_handler(client: Client, message: Message):
         TRACKED_TORRENTS.pop(torrent_id, None)
         
         # Update status in ALL chats that have status messages
-        from core.message_builder import update_consolidated_status
-        import core.torrent_manager as tm
+        from core.status_tracker import update_status_message, STATUS_MESSAGES
         
         logger.info(f"/cancel command: TRACKED_TORRENTS count after removal: {len(TRACKED_TORRENTS)}")
-        logger.info(f"/cancel command: CONSOLIDATED_STATUS_MESSAGES chats: {list(tm.CONSOLIDATED_STATUS_MESSAGES.keys())}")
+        logger.info(f"/cancel command: Active status messages: {list(STATUS_MESSAGES.keys())}")
         
         # Update status for ALL chats that have a status message
-        for chat_id in list(tm.CONSOLIDATED_STATUS_MESSAGES.keys()):
-            logger.info(f"Updating status for chat {chat_id} after /cancel command")
-            # Force recreate to show updated list immediately
-            await update_consolidated_status(client, chat_id, force_recreate=True)
+        for sid in list(STATUS_MESSAGES.keys()):
+            logger.info(f"Updating status for sid {sid} after /cancel command")
+            # Force update to show updated list immediately
+            await update_status_message(sid, client, force=True)
         
         # Delete the progress message
         if progress_msg:

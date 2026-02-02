@@ -132,19 +132,18 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             # Remove from tracking
             TRACKED_TORRENTS.pop(torrent_id, None)
             
-            # Immediately update the consolidated status message in ALL chats
+            # Immediately update the status messages in ALL chats
             # This ensures the cancelled torrent is removed from everyone's view
-            from core.message_builder import update_consolidated_status
-            import core.torrent_manager as tm
+            from core.status_tracker import update_status_message, STATUS_MESSAGES
             
             logger.info(f"Cancellation: TRACKED_TORRENTS count after removal: {len(TRACKED_TORRENTS)}")
-            logger.info(f"Cancellation: CONSOLIDATED_STATUS_MESSAGES chats: {list(tm.CONSOLIDATED_STATUS_MESSAGES.keys())}")
+            logger.info(f"Cancellation: Active status messages: {list(STATUS_MESSAGES.keys())}")
             
             # Update status for ALL chats that have a status message
-            for chat_id in list(tm.CONSOLIDATED_STATUS_MESSAGES.keys()):
-                logger.info(f"Updating status for chat {chat_id} after cancellation")
-                # Force recreate to show updated list immediately
-                await update_consolidated_status(client, chat_id, force_recreate=True)
+            for sid in list(STATUS_MESSAGES.keys()):
+                logger.info(f"Updating status for sid {sid} after cancellation")
+                # Force update to show updated list immediately
+                await update_status_message(sid, client, force=True)
             
             if result.get("success"):
                 await callback.message.edit_text(
@@ -172,28 +171,36 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         
         # Status pagination - Next button
         elif data == "status_next":
-            import core.torrent_manager as tm
-            from core.message_builder import update_consolidated_status
+            from core.status_tracker import STATUS_MESSAGES
             
-            # Increment page
-            tm.STATUS_CURRENT_PAGE += 1
+            # Get sid from callback message
+            sid = callback.message.chat.id
             
-            # Update the consolidated status message
-            chat_id = callback.message.chat.id
-            await update_consolidated_status(client, chat_id)
+            if sid in STATUS_MESSAGES:
+                status_state = STATUS_MESSAGES[sid]
+                status_state["page_no"] += status_state.get("page_step", 1)
+                
+                # Force update to show new page
+                from core.status_tracker import update_status_message
+                await update_status_message(sid, client, force=True)
+            
             await callback.answer("➡️ Next page")
         
         # Status pagination - Previous button
         elif data == "status_prev":
-            import core.torrent_manager as tm
-            from core.message_builder import update_consolidated_status
+            from core.status_tracker import STATUS_MESSAGES
             
-            # Decrement page
-            tm.STATUS_CURRENT_PAGE = max(0, tm.STATUS_CURRENT_PAGE - 1)
+            # Get sid from callback message
+            sid = callback.message.chat.id
             
-            # Update the consolidated status message
-            chat_id = callback.message.chat.id
-            await update_consolidated_status(client, chat_id)
+            if sid in STATUS_MESSAGES:
+                status_state = STATUS_MESSAGES[sid]
+                status_state["page_no"] = max(0, status_state["page_no"] - status_state.get("page_step", 1))
+                
+                # Force update to show new page
+                from core.status_tracker import update_status_message
+                await update_status_message(sid, client, force=True)
+            
             await callback.answer("⬅️ Previous page")
         
         # Status page info button (just informational)

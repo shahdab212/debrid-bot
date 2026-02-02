@@ -105,8 +105,12 @@ def authorized_only(func):
     async def wrapper(client, message, *args, **kwargs):
         if not await auth_service.is_authorized(message.chat.id):
             await message.reply_text(
-                "🔒 **Access Denied**\\n\\n"
-                "You are not authorized to use this bot.\\n\\n"
+                "🔒 **Access Denied**
+
+"
+                "You are not authorized to use this bot.
+
+"
                 "📧 Please contact the bot administrator to request access."
             )
             return

@@ -101,40 +101,8 @@ async def help_handler(client: Client, message: Message):
 @authorized_only
 async def status_handler(client: Client, message: Message):
     """Show current download status for all active torrents."""
-    from core.torrent_manager import TRACKED_TORRENTS
-    from core.message_builder import update_consolidated_status
+    from core.status_tracker import send_status_message
     
-    if not TRACKED_TORRENTS:
-        # No active downloads - send friendly message
-        await message.reply_text(
-            "💤 **No Active Downloads**\n\n"
-            "────────────────────────────\n\n"
-            "📊 **Current Status:**\n"
-            "There are no torrents being downloaded at the moment.\n\n"
-            "✨ **Get Started:**\n"
-            "• Use `/dl <link>` to start a download\n"
-            "• Reply to any magnet/torrent with `/dl`\n"
-            "• Add `-zip` flag for archives\n\n"
-            "💡 Tip: Downloads will show here automatically once started!\n\n"
-            "────────────────────────────"
-        )
-        return
-    
-    # Send a temporary message that will be deleted
-    temp_msg = await message.reply_text("📊 Fetching download status...")
-    
-    try:
-        # Delete the temporary message
-        await temp_msg.delete()
-        
-        # Send the consolidated status (force_recreate=False to create fresh message)
-        chat_id = message.chat.id
-        await update_consolidated_status(client, chat_id, force_recreate=True)
-        
-    except Exception as e:
-        logger.error(f"Status command error: {e}", exc_info=True)
-        await message.reply_text(
-            "❌ **Error Fetching Status**\n\n"
-            f"An error occurred: `{str(e)}`\n\n"
-            "Please try again in a moment."
-        )
+    # Send status message (will automatically handle no downloads case)
+    sid = message.chat.id  # Use chat_id as session ID
+    await send_status_message(sid, client, message, user_id=0)
