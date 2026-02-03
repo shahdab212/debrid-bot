@@ -207,6 +207,26 @@ async def callback_handler(client: Client, callback: CallbackQuery):
         elif data == "status_page_info":
             await callback.answer("📄 Page indicator", show_alert=False)
         
+        # Search help callback
+        elif data == "search_help":
+            await callback.answer()
+            await callback.message.reply_text(
+                "📖 **How to Download Search Results**\n\n"
+                "**Step 1:** Click 'View Results' button\n"
+                "This opens a Telegraph page with all torrents\n\n"
+                "**Step 2:** Browse the results\n"
+                "Look for the torrent you want to download\n\n"
+                "**Step 3:** Click 'View Details'\n"
+                "This takes you to the torrent info page on 1337x\n\n"
+                "**Step 4:** Get the magnet link\n"
+                "Copy the magnet link from the info page\n\n"
+                "**Step 5:** Download with bot\n"
+                "Send the command: `/dl magnet:...`\n\n"
+                f"{'━' * 30}\n\n"
+                "💡 **Pro Tip:** You can also use `-zip` flag:\n"
+                "`/dl magnet:... -zip`"
+            )
+        
         else:
             await callback.answer("❓ Unknown action")
     

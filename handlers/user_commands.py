@@ -55,6 +55,12 @@ async def help_handler(client: Client, message: Message):
         "   • Reply to links/files with /dl\n"
         "   • Example: /dl magnet:?xt=abc123 -zip\n\n"
         
+        "▫️ /search **query** • **Search Torrents**\n"
+        "   Search for torrents on 1337x\n"
+        "   • Returns results via Telegraph page\n"
+        "   • Click 'View Details' to get magnet links\n"
+        "   • Example: /search ubuntu 22.04\n\n"
+        
         f"{'━' * 32}\n\n"
         "⚡ **QUICK USAGE GUIDE**\n\n"
         

@@ -46,6 +46,7 @@ def dual_prefix_command(commands):
 # Import and register all handlers
 from handlers.user_commands import start_handler, help_handler, dl_handler
 from handlers.user_commands_status import status_handler
+from handlers.search_handler import search_handler
 from handlers.admin_commands import (
     auth_handler, deauth_handler, log_handler, users_handler,
     restart_handler, limits_handler, cancel_handler
@@ -57,6 +58,7 @@ app.on_message(dual_prefix_command("start"))(start_handler)
 app.on_message(dual_prefix_command("help"))(help_handler)
 app.on_message(dual_prefix_command("dl"))(dl_handler)
 app.on_message(dual_prefix_command("status"))(status_handler)
+app.on_message(dual_prefix_command("search"))(search_handler)
 
 # Register admin command handlers
 app.on_message(dual_prefix_command("auth"))(auth_handler)
