@@ -31,15 +31,29 @@ async def auth_handler(client: Client, message: Message):
         )
         return
     
-    if len(message.command) < 2:
-        # If no ID provided, auth the current chat
-        chat_id = message.chat.id
-    else:
+    # Priority 1: Check if replying to a user's message
+    if message.reply_to_message and message.reply_to_message.from_user:
+        chat_id = message.reply_to_message.from_user.id
+    # Priority 2: Check if chat ID provided as argument
+    elif len(message.command) >= 2:
         try:
             chat_id = int(message.command[1])
         except ValueError:
             await message.reply_text("❌ **Invalid Chat ID**\nPlease provide a valid numeric chat ID.")
             return
+    # Priority 3: Authorize current chat
+    else:
+        chat_id = message.chat.id
+    
+    # Check if the chat_id is already an admin
+    if config.is_admin(chat_id):
+        await message.reply_text(
+            f"ℹ️ **Already an Administrator**\n\n"
+            f"Chat ID: `{chat_id}`\n\n"
+            f"This user is already a bot administrator and has full access.\n"
+            f"No authorization needed."
+        )
+        return
     
     await auth_service.add_chat(chat_id, authorized_by=message.from_user.id)
     await message.reply_text(
@@ -59,14 +73,19 @@ async def deauth_handler(client: Client, message: Message):
         )
         return
     
-    if len(message.command) < 2:
-        chat_id = message.chat.id
-    else:
+    # Priority 1: Check if replying to a user's message
+    if message.reply_to_message and message.reply_to_message.from_user:
+        chat_id = message.reply_to_message.from_user.id
+    # Priority 2: Check if chat ID provided as argument
+    elif len(message.command) >= 2:
         try:
             chat_id = int(message.command[1])
         except ValueError:
             await message.reply_text("❌ **Invalid Chat ID**\nPlease provide a valid numeric chat ID.")
             return
+    # Priority 3: Deauthorize current chat
+    else:
+        chat_id = message.chat.id
 
     await auth_service.remove_chat(chat_id)
     await message.reply_text(
