@@ -59,6 +59,44 @@ class PasteService:
             print(f"Termbin upload error: {e}")
             return None
     
+    async def upload_to_spacebin(self, content: str) -> Optional[str]:
+        """
+        Upload to spaceb.in (modern paste service)
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                payload = {
+                    "content": content
+                }
+                
+                logger.info("Uploading to spaceb.in...")
+                async with session.post(
+                    "https://spaceb.in/api/",
+                    json=payload
+                ) as resp:
+                    logger.info(f"Spacebin response status: {resp.status}")
+                    if resp.status in [200, 201]:
+                        data = await resp.json()
+                        logger.info(f"Spacebin response data: {data}")
+                        # spaceb.in returns {"payload": {"id": "abc123"}} or just {"id": "abc123"}
+                        doc_id = data.get("payload", {}).get("id") or data.get("id")
+                        if doc_id:
+                            url = f"https://spaceb.in/{doc_id}"
+                            logger.info(f"Successfully uploaded to spaceb.in: {url}")
+                            return url
+                        else:
+                            logger.error(f"No document ID in response: {data}")
+                    else:
+                        error_text = await resp.text()
+                        logger.error(f"Spacebin upload failed with status {resp.status}: {error_text}")
+            return None
+        except Exception as e:
+            logger.error(f"Spacebin upload error: {e}", exc_info=True)
+            return None
+    
     async def create_paste(self, file_links: list, torrent_name: str) -> Optional[str]:
         """
         Create a paste with all file download links

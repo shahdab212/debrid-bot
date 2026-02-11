@@ -134,6 +134,8 @@ The bot uses a database to store authorized chat IDs, ensuring they persist acro
 - `/start` - Welcome message and quick start guide
 - `/help` - Comprehensive help with all commands
 - `/status` - View all active downloads and their progress
+- `/hosters` - Display all supported file hosters and their status
+- `/search <query>` - Search for torrents on 1337x (returns results via Telegraph)
 
 ### Admin Commands
 

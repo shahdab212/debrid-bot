@@ -126,22 +126,41 @@ async def log_handler(client: Client, message: Message):
             return
 
         with open("bot.log", "r") as f:
-            # Read all lines and take the last N
+            # Read all lines and take the last 150 for both file and web paste
             all_lines = f.readlines()
-            logs = all_lines[-lines_count:] if len(all_lines) > lines_count else all_lines
+            logs = all_lines[-150:] if len(all_lines) > 150 else all_lines
         
         if not logs:
             await message.reply_text("⚠️ **Log File Empty**")
             return
 
-        # Create temp file in memory
+        # Create temp file in memory with 150 lines
         log_content = "".join(logs)
         log_file = io.BytesIO(log_content.encode('utf-8'))
         log_file.name = "log.txt"
+        
+        # Upload to spaceb.in for web viewing (150 lines should fit well within limit)
+        from services.paste_service import paste_service
+        from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        
+        # Create web paste content
+        web_content = f"BOT LOG - Last {len(logs)} lines\n"
+        web_content += "=" * 80 + "\n\n"
+        web_content += "".join(logs)
+        
+        paste_url = await paste_service.upload_to_spacebin(web_content)
+        
+        # Create button if paste was successful
+        keyboard = None
+        if paste_url:
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🌐 Web Paste", url=paste_url)]
+            ])
 
         await message.reply_document(
             document=log_file,
-            caption=f"📋 **System Log**\nLast {len(logs)} lines from `bot.log`"
+            caption=f"📋 **System Log**\nLast {len(logs)} lines from `bot.log`",
+            reply_markup=keyboard
         )
         
     except Exception as e:

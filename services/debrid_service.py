@@ -95,4 +95,13 @@ class DebridService:
         """
         return await self._request("GET", "/seedbox/limits")
 
+    async def get_hosts(self) -> Dict[str, Any]:
+        """
+        Get list of supported file hosters with their status
+        
+        Returns:
+            Dict containing list of hosters with their domains, status, etc.
+        """
+        return await self._request("GET", "/downloader/hosts")
+
 debrid_service = DebridService()
