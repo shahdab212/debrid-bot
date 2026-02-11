@@ -61,6 +61,15 @@ async def help_handler(client: Client, message: Message):
         "   • Click 'View Details' to get magnet links\n"
         "   • Example: /search ubuntu 22.04\n\n"
         
+        "▫️ /hosters • **View Supported Hosters**\n"
+        "   Display status of all file hosting services\n"
+        "   • Shows online and offline hosters\n"
+        "   • Real-time status from Debrid-Link\n"
+        "   • See available domains for each hoster\n\n"
+        
+        "▫️ /status • **View Active Downloads**\n"
+        "   Check status of currently downloading files\n\n"
+        
         f"{'━' * 32}\n\n"
         "⚡ **QUICK USAGE GUIDE**\n\n"
         
@@ -141,17 +150,20 @@ async def dl_handler(client: Client, message: Message):
     
     if not link and not file_bytes:
         await message.reply_text(
-            "❌ **No Download Source Provided**\n\n"
-            "**Supported Sources:**\n"
-            "🧲 Magnet links\n"
-            "📁 .torrent files (upload or URL)\n"
-            "🔗 File hosters (MEGA, RapidGator, 1fichier, Mediafire, etc.)\n\n"
-            "**Usage Examples:**\n"
-            "• `/dl magnet:?xt=urn:btih:...`\n"
-            "• `/dl https://example.com/file.torrent`\n"
-            "• `/dl https://mega.nz/file/...`\n"
-            "• Reply to any file/link with `/dl`\n\n"
-            "💡 Use `/help` for detailed instructions"
+            f"⚠️ **No Download Source Provided** ⚠️\n\n"
+            f"{'─' * 30}\n\n"
+            f"ℹ️ **Please provide a download link or file.**\n\n"
+            f"✅ **Supported Link Types:**\n"
+            f"• Magnet links\n"
+            f"• Torrent files (upload or URL)\n"
+            f"• File hoster links\n\n"
+            f"📝 **Usage Examples:**\n"
+            f"• `/dl magnet:?xt=urn:btih:...`\n"
+            f"• `/dl https://example.com/file.torrent`\n"
+            f"• `/dl https://mega.nz/file/...`\n"
+            f"• Reply to any file/link with `/dl`\n\n"
+            f"💡 **For a complete list of supported file hosters, use:** `/hosters`\n\n"
+            f"{'─' * 30}"
         )
         return
 
@@ -441,17 +453,212 @@ async def _handle_hoster_link(link, sent_msg, message):
             )
         
         await sent_msg.edit_text(
-            f"❌ **Unable to Process Link**\n\n"
-            f"The link could not be added to your seedbox.\n\n"
-            f"**Possible reasons:**\n"
-            f"• The Debrid-Link server may be temporarily down\n"
-            f"• The link format may not be supported\n"
-            f"• Your account quota may be exceeded\n\n"
-            f"💡 **Please try again in a few moments.**"
+            f"⚠️ **Link Not Supported** ⚠️\n\n"
+            f"{'─' * 30}\n\n"
+            f"The link you provided is not supported.\n\n"
+            f"✅ **Supported Link Types:**\n"
+            f"• Torrent files and magnet links\n"
+            f"• File hoster links (MEGA, RapidGator, etc.)\n\n"
+            f"💡 **To view the complete list of supported file hosters and their current status, use:**\n"
+            f"`/hosters`\n\n"
+            f"{'─' * 30}"
         )
 
 
 
 # NOTE: status_handler has been moved to handlers/user_commands_status.py
 # and now uses the centralized status_tracker module
+
+
+@authorized_only
+async def hosters_handler(client: Client, message: Message):
+    """Display the status of all supported file hosters."""
+    msg = await message.reply_text("⏳ **Fetching hoster information...**")
+    
+    try:
+        resp = await debrid_service.get_hosts()
+        if not resp.get("success"):
+            await msg.edit_text(
+                f"❌ **Error:** Failed to fetch hosters list.\n"
+                f"`{resp.get('error', 'Unknown error')}`"
+            )
+            return
+        
+        hosters = resp.get("value", [])
+        if not hosters:
+            await msg.edit_text("⚠️ **No hosters found.**")
+            return
+        
+        # Curated list of popular/major hosters (matching website's ~47 count)
+        # This filters out lesser-known or regional variations
+        POPULAR_HOSTERS = {
+            '1fichier', 'clicknupload', 'ddownload', 'ddl', 'depositfiles', 
+            'dailyuploads', 'downup', 'drop.download', 'dropapk', 'dropbox', 
+            'elitefile', 'emload', 'wdupload', 'file.al', 'fileal', 'fileaxa', 
+            'filecat', 'filedot', 'filefactory', 'filejoker', 'filenext', 
+            'filer', 'filesfly', 'filespace', 'filextras', 'gigapeta', 
+            'gofile', 'googledrive', 'hitfile', 'hotlink', 'hulkshare', 
+            'isracloud', 'jumploads', 'goloady', 'katfile', 'kshared', 
+            'mediafire', 'mega', 'mixdrop', 'nelion', 'pixeldrain', 
+            'prefiles', 'rapidgator', 'scribd', 'silkfiles', 'terabox', 
+            'terabytez', 'tezfiles', 'turbobit', 'uploady', 'uptobox',
+            'upvid', 'uqload', 'vidoza', 'workupload', 'worldfiles', 
+            'worldbytez', 'icloud', 'hexupload', 'darkibox', 'exload'
+        }
+        
+        # Categorize hosters by status
+        # Show only popular services in the message, but keep all in the paste
+        online_hosters = []
+        offline_hosters = []
+        all_hosters_raw = []  # For the full list upload (keep all entries with domains)
+        
+        # Track unique service names to avoid duplicates
+        seen_online = set()
+        seen_offline = set()
+        
+        # Track total counts (all services including filtered ones)
+        total_online = 0
+        total_offline = 0
+        
+        for hoster in hosters:
+            name = hoster.get("name", "Unknown").lower()  # Use lowercase for comparison
+            status = hoster.get("status", 0)
+            is_free = hoster.get("isFree", False)
+            domains = hoster.get("domains", [])
+            
+            # Count all services
+            if status == 1:
+                total_online += 1
+            else:
+                total_offline += 1
+            
+            # Only process popular services for both display and full list
+            if name in POPULAR_HOSTERS:
+                # For full list with domains (only popular services)
+                domain_list = ", ".join(domains) if domains else "No domains listed"
+                status_text = "✅ Online" if status == 1 else "❌ Offline"
+                free_tag_full = " [FREE]" if is_free else ""
+                full_info = f"{name.upper()}{free_tag_full}\n  Status: {status_text}\n  Domains: {domain_list}\n"
+                all_hosters_raw.append((status, full_info))
+                
+                # For display message
+                free_tag = " 🆓" if is_free else ""
+                # Store name and free_tag for numbering later
+                hoster_info = (name.capitalize(), free_tag)
+                
+                if status == 1:
+                    if name not in seen_online:
+                        online_hosters.append(hoster_info)
+                        seen_online.add(name)
+                else:
+                    if name not in seen_offline:
+                        offline_hosters.append(hoster_info)
+                        seen_offline.add(name)
+
+        
+        # Debug: Log the filtering results
+        logger.info(f"Raw API returned {len(hosters)} total entries")
+        logger.info(f"Total services: {total_online} online, {total_offline} offline")
+        logger.info(f"Showing popular services: {len(online_hosters)} online, {len(offline_hosters)} offline")
+        
+        # Build the message
+        text_parts = [
+            "🌐 **Supported File Hosters**\n",
+            f"{'━' * 32}\n"
+        ]
+        
+        # Show online hosters with numbering
+        if online_hosters:
+            text_parts.append(f"\n✅ **Online ({len(online_hosters)} hosters)**\n\n")
+            # Add numbering
+            numbered_online = [f"{i}. {name}{tag}" for i, (name, tag) in enumerate(online_hosters[:20], 1)]
+            text_parts.append("\n".join(numbered_online))
+            if len(online_hosters) > 20:
+                text_parts.append(f"\n\n...and {len(online_hosters) - 20} more online hosters")
+        
+        # Show offline hosters with numbering
+        if offline_hosters:
+            text_parts.append(f"\n\n❌ **Offline ({len(offline_hosters)} hosters)**\n\n")
+            # Add numbering
+            numbered_offline = [f"{i}. {name}{tag}" for i, (name, tag) in enumerate(offline_hosters[:10], 1)]
+            text_parts.append("\n".join(numbered_offline))
+            if len(offline_hosters) > 10:
+                text_parts.append(f"\n\n...and {len(offline_hosters) - 10} more offline hosters")
+        
+        text_parts.append(f"\n\n{'━' * 32}")
+        # Use deduplicated count (unique services)
+        total_unique = len(online_hosters) + len(offline_hosters)
+        text_parts.append(f"\n📊 **Total:** {total_unique} hosters")
+        text_parts.append(f"\n💡 Status updates in real-time from Debrid-Link")
+        
+        # Create full list and upload to spaceb.in
+        full_list_content = [
+            "🌐 DEBRID-LINK SUPPORTED FILE HOSTERS",
+            "=" * 80,
+            "",
+            f"Total Hosters: {total_unique}",
+            f"Online: {len(online_hosters)} | Offline: {len(offline_hosters)}",
+            "",
+            "=" * 80,
+            ""
+        ]
+        
+        # Add online hosters (all entries with full domain info and numbering)
+        if online_hosters:
+            full_list_content.append("\n✅ ONLINE HOSTERS\n")
+            full_list_content.append("-" * 80)
+            counter = 1
+            for status, hoster_info in all_hosters_raw:
+                if status == 1:
+                    # Add number prefix to each entry
+                    full_list_content.append(f"\n{counter}. {hoster_info}")
+                    counter += 1
+        
+        # Add offline hosters (all entries with full domain info and numbering)
+        if offline_hosters:
+            full_list_content.append("\n\n" + "=" * 80)
+            full_list_content.append("\n❌ OFFLINE HOSTERS\n")
+            full_list_content.append("-" * 80)
+            counter = 1
+            for status, hoster_info in all_hosters_raw:
+                if status == 0:
+                    # Add number prefix to each entry
+                    full_list_content.append(f"\n{counter}. {hoster_info}")
+                    counter += 1
+
+        
+        full_list_content.append("\n\n" + "=" * 80)
+        full_list_content.append("\n🤖 Generated by Debrid-Link Telegram Bot")
+        
+        full_text = "\n".join(full_list_content)
+        
+        # Upload to spaceb.in
+        from services.paste_service import paste_service
+        logger.info("Attempting to upload hosters list to spaceb.in...")
+        paste_url = await paste_service.upload_to_spacebin(full_text)
+        
+        if paste_url:
+            logger.info(f"Successfully got paste URL: {paste_url}")
+        else:
+            logger.warning("Failed to upload to spaceb.in - no URL returned")
+        
+        # Create button if paste was successful
+        keyboard = None
+        if paste_url:
+            from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("📋 See Full List", url=paste_url)]
+            ])
+            logger.info("Created keyboard with 'See Full List' button")
+        else:
+            logger.warning("No button created - paste upload failed")
+        
+        await msg.edit_text("".join(text_parts), reply_markup=keyboard)
+        
+    except Exception as e:
+        logger.error(f"Hosters command error: {e}", exc_info=True)
+        await msg.edit_text(
+            f"❌ **Error Fetching Hosters**\n\n"
+            f"Error: `{str(e)}`"
+        )
 
