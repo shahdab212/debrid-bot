@@ -31,9 +31,14 @@ async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str,
     
     # If ZIP flag is set, create ZIP
     zip_url = None
+    zip_progress_msg = None
     if create_zip and len(files) > 1:
         try:
-            await msg.edit_text("📦 Creating ZIP archive...")
+            # Send a new message instead of editing (the status message may be deleted)
+            try:
+                zip_progress_msg = await msg.reply_text("📦 Creating ZIP archive...", quote=False)
+            except Exception as e:
+                logger.debug(f"Could not send ZIP progress message: {e}")
             
             # Extract all file IDs
             file_ids = [f['id'] for f in files if 'id' in f]
@@ -96,11 +101,12 @@ async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str,
                 
         except Exception as e:
             logger.error(f"ZIP creation error: {e}")
-            # Try to recover message if stuck
-            try:
-                await msg.delete()
-            except:
-                pass
+            # Clean up ZIP progress message if it exists
+            if zip_progress_msg:
+                try:
+                    await zip_progress_msg.delete()
+                except:
+                    pass
 
     if zip_url:
         links_text = ""  # Clear file list if ZIP is available
@@ -160,9 +166,21 @@ async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str,
     )
     
     try:
-        await msg.delete()  # Delete progress message
-        # Use default Markdown parse mode for consistent formatting
-        await msg.reply_text(final_text, quote=False, reply_markup=keyboard)  # Send new message
+        # Delete ZIP progress message if it exists
+        if zip_progress_msg:
+            try:
+                await zip_progress_msg.delete()
+            except Exception as e:
+                logger.debug(f"Could not delete ZIP progress message: {e}")
+        
+        # Delete original status/progress message
+        try:
+            await msg.delete()
+        except Exception as e:
+            logger.debug(f"Could not delete original message: {e}")
+        
+        # Send final completion message
+        await msg.reply_text(final_text, quote=False, reply_markup=keyboard)
     except Exception as e:
         logger.error(f"Error sending completion msg: {e}")
     
