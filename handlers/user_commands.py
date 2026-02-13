@@ -207,7 +207,11 @@ async def dl_handler(client: Client, message: Message):
             if not is_torrent_url and not link.startswith('magnet:'):
                 try:
                     import aiohttp
-                    async with aiohttp.ClientSession() as session:
+                    # Add User-Agent header to prevent blocking
+                    headers = {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    }
+                    async with aiohttp.ClientSession(headers=headers) as session:
                         async with session.head(link, allow_redirects=True, timeout=aiohttp.ClientTimeout(total=5)) as response:
                             content_type = response.headers.get('Content-Type', '').lower()
                             is_torrent_url = 'torrent' in content_type or content_type == 'application/x-bittorrent'
@@ -247,8 +251,19 @@ async def _handle_torrent_url(link, sent_msg, message, create_zip, force_no_zip)
         import aiohttp
         await sent_msg.edit_text("⏬️ **Downloading .torrent file from URL...**")
         
-        async with aiohttp.ClientSession() as session:
-            async with session.get(link) as response:
+        # Add browser-like headers to prevent 403/504 errors from torrent sites
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/x-bittorrent,*/*',
+            'Referer': link,
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+        
+        # Set a reasonable timeout for downloading torrent files
+        timeout = aiohttp.ClientTimeout(total=30)
+        
+        async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
+            async with session.get(link, allow_redirects=True) as response:
                 if response.status == 200:
                     file_bytes = await response.read()
                     await sent_msg.edit_text("⬆️ **Uploading .torrent file...**")
