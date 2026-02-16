@@ -468,13 +468,17 @@ async def _handle_hoster_link(link, sent_msg, message):
             )
         
         await sent_msg.edit_text(
-            f"⚠️ **Link Not Supported** ⚠️\n\n"
+            f"⚠️ **Unable to Process Link** ⚠️\n\n"
             f"{'─' * 30}\n\n"
-            f"Link not supported or the host is down. Try again after some time with a valid link.\n\n"
+            f"The link could not be processed. This may be because:\n"
+            f"• The link is invalid or broken\n"
+            f"• The file was not found or has been deleted\n"
+            f"• The file host is currently down\n"
+            f"• The link format is not supported\n\n"
             f"✅ **Supported Link Types:**\n"
             f"• Torrent files and magnet links\n"
             f"• File hoster links (MEGA, RapidGator, etc.)\n\n"
-            f"💡 To view the complete list of supported file hosters and their current status, use /hosters\n\n"
+            f"💡 Use /hosters to check supported file hosters and their status\n\n"
             f"{'─' * 30}"
         )
 
