@@ -49,7 +49,7 @@ class DebridService:
         return await self._request("POST", "/seedbox/add", data=data)
 
     async def add_hoster_link(self, link: str) -> Dict[str, Any]:
-        return await self._request("POST", "/downloader/add", json={"url": link, "async": False})
+        return await self._request("POST", "/downloader/add", json={"url": link, "async": True})
 
     async def delete_torrent(self, torrent_id: str) -> Dict[str, Any]:
         return await self._request("DELETE", f"/seedbox/{torrent_id}/remove")

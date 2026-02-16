@@ -46,12 +46,23 @@ async function handleRequest(request) {
             return new Response('Invalid data parameter', { status: 400 })
         }
 
-        // Fetch the file from Debrid-Link
+        // Get Range header from incoming request for resume support
+        const rangeHeader = request.headers.get('Range')
+
+        // Prepare headers for upstream request
+        const upstreamHeaders = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        }
+
+        // Forward Range header if present (for resume support)
+        if (rangeHeader) {
+            upstreamHeaders['Range'] = rangeHeader
+        }
+
+        // Fetch the file from Debrid-Link with Range support
         const response = await fetch(decodedUrl, {
             method: 'GET',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            },
+            headers: upstreamHeaders,
         })
 
         if (!response.ok) {
@@ -66,10 +77,21 @@ async function handleRequest(request) {
             headers.set('Content-Disposition', `attachment; filename="${filename}"`)
         }
         headers.set('Access-Control-Allow-Origin', '*')
-        headers.set('Cache-Control', 'public, max-age=3600')
 
+        // Keep original Cache-Control or set default
+        if (!headers.has('Cache-Control')) {
+            headers.set('Cache-Control', 'public, max-age=3600')
+        }
+
+        // Ensure range-related headers are preserved
+        // These are critical for resume functionality:
+        // - Accept-Ranges: indicates server supports range requests
+        // - Content-Range: specifies which part of the resource is being sent
+        // - Content-Length: size of the response (partial or full)
+
+        // Return with appropriate status code (206 for partial content, 200 for full)
         return new Response(response.body, {
-            status: 200,
+            status: response.status, // Preserve 206 Partial Content or 200 OK
             headers: headers,
         })
 
@@ -109,7 +131,7 @@ function handleCORS() {
         headers: {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Headers': 'Content-Type, Range',
             'Access-Control-Max-Age': '86400',
         },
     })
