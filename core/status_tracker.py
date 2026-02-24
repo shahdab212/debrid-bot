@@ -2,10 +2,9 @@
 
 This module implements the status message tracking pattern from mltb-read:
 - One status message per session ID (sid: user_id or chat_id)
-- Per-sid auto-update intervals
-- Rate limiting (max 1 update per 3 seconds)
 - Content comparison before editing
 - Proper lifecycle management and cleanup
+- Smooth download progress interpolation using speed × elapsed time
 """
 
 import asyncio
@@ -22,12 +21,9 @@ logger = logging.getLogger(__name__)
 # Maps sid (session ID: user_id or chat_id) -> status state
 STATUS_MESSAGES: Dict[int, Dict[str, Any]] = {}
 
-# Active update intervals per sid
-STATUS_INTERVALS: Dict[int, asyncio.Task] = {}
-
-# Configuration
-MIN_UPDATE_INTERVAL = 3  # Minimum seconds between updates
-AUTO_UPDATE_INTERVAL = 5  # Seconds between auto-updates
+# Per-torrent download tracking for smooth progress interpolation
+# Maps torrent_id -> {"last_downloaded": float, "last_update_time": float, "last_percent": int}
+DOWNLOAD_TRACKING: Dict[str, Dict[str, float]] = {}
 
 
 async def build_status_text(download_entries: list, page_no: int, total_pages: int) -> tuple[str, Any]:
@@ -61,13 +57,22 @@ async def build_status_text(download_entries: list, page_no: int, total_pages: i
         text_parts.append(f"\n**{idx}.**\n")
         text_parts.append(f"📁 **Name:** {entry['name']}\n")
         text_parts.append(f"📏 **File Size:** {display.human_readable_size(entry['size'])}\n\n")
-        text_parts.append(f"**Progress:**\n")
-        text_parts.append(f"[{display.progress_bar(entry['progress'], 100)}] {display.percentage(entry['progress'], 100)}\n\n")
-        text_parts.append(f"🚀 **Speed:** {display.speed_format(entry['speed'])}\n")
-        text_parts.append(f"♻️ **Downloaded:** {display.human_readable_size(entry['downloaded'])} / {display.human_readable_size(entry['size'])}\n")
-        text_parts.append(f"⏳ **ETA:** {display.human_readable_time(entry['eta'])}\n")
-        text_parts.append(f"👤 **Task By:** {entry['user_mention']}\n")
-        text_parts.append(f"📛 **Stop Task:** `/cancel {entry['torrent_id'][-6:]}`\n")
+        
+        if entry.get('status') == 'zipping':
+            # Show zipping state
+            text_parts.append(f"**Progress:**\n")
+            text_parts.append(f"[{display.progress_bar(100, 100)}] 100%\n\n")
+            text_parts.append(f"📦 **Status:** Zipping files...\n")
+            text_parts.append(f"👤 **Task By:** {entry['user_mention']}\n")
+        else:
+            # Normal download progress
+            text_parts.append(f"**Progress:**\n")
+            text_parts.append(f"[{display.progress_bar(entry['progress'], 100)}] {display.percentage(entry['progress'], 100)}\n\n")
+            text_parts.append(f"🚀 **Speed:** {display.speed_format(entry['speed'])}\n")
+            text_parts.append(f"♻️ **Downloaded:** {display.human_readable_size(entry['downloaded'])} / {display.human_readable_size(entry['size'])}\n")
+            text_parts.append(f"⏳ **ETA:** {display.human_readable_time(entry['eta'])}\n")
+            text_parts.append(f"👤 **Task By:** {entry['user_mention']}\n")
+            text_parts.append(f"📛 **Stop Task:** `/cancel {entry['torrent_id'][-6:]}`\n")
     
     text_parts.append(f"\n{'─' * 30}")
     
@@ -77,8 +82,12 @@ async def build_status_text(download_entries: list, page_no: int, total_pages: i
     return text, keyboard
 
 
-async def get_download_entries() -> list:
+async def get_download_entries(api_data: dict = None) -> list:
     """Get all active download entries from tracked torrents.
+    
+    Args:
+        api_data: Pre-fetched API data dict {torrent_id: torrent_data}.
+                  If None, fetches from API directly.
     
     Returns:
         List of download entry dicts
@@ -89,18 +98,23 @@ async def get_download_entries() -> list:
     if not TRACKED_TORRENTS:
         return []
     
-    # Get all active torrents from Debrid-Link
-    try:
-        response = await debrid_service.get_seedbox_torrents()
-        if not response.get("success"):
-            logger.error("Failed to get torrent list for status")
+    # Use pre-fetched data or fetch from API
+    if api_data is not None:
+        active_torrents = api_data
+    else:
+        try:
+            response = await debrid_service.get_seedbox_torrents()
+            if not response.get("success"):
+                logger.error("Failed to get torrent list for status")
+                return []
+            
+            active_list = response.get("value", [])
+            active_torrents = {t["id"]: t for t in active_list}
+        except Exception as e:
+            logger.error(f"Error fetching torrents for status: {e}")
             return []
-        
-        active_list = response.get("value", [])
-        active_torrents = {t["id"]: t for t in active_list}
-    except Exception as e:
-        logger.error(f"Error fetching torrents for status: {e}")
-        return []
+    
+    now = time.time()
     
     # Build list of download entries
     download_entries = []
@@ -114,6 +128,7 @@ async def get_download_entries() -> list:
         
         name = data.get("name", "Unknown")
         progress = data.get("downloadPercent", 0)
+        speed = data.get("downloadSpeed", 0)
         
         # Calculate size
         if "cached_size" in torrent_data:
@@ -126,12 +141,36 @@ async def get_download_entries() -> list:
             else:
                 size = 0
         
-        # Calculate downloaded and speed
-        downloaded_approx = size * (progress / 100)
-        speed = data.get("downloadSpeed", 0)
+        # Smooth downloaded calculation using speed-based interpolation
+        percent_based = size * (progress / 100) if size > 0 else 0
         
-        # Calculate ETA
-        remaining_bytes = size - downloaded_approx
+        if t_id in DOWNLOAD_TRACKING:
+            tracker = DOWNLOAD_TRACKING[t_id]
+            elapsed = now - tracker["last_update_time"]
+            
+            # If percent changed, snap to the new percent-based value
+            if progress != tracker["last_percent"]:
+                downloaded = percent_based
+            else:
+                # Interpolate: last_downloaded + speed * elapsed
+                downloaded = tracker["last_downloaded"] + (speed * elapsed)
+                # Clamp: don't exceed percent-based ceiling or total size
+                downloaded = min(downloaded, percent_based + (size * 0.01) if size > 0 else downloaded)
+                downloaded = min(downloaded, size) if size > 0 else downloaded
+                # Don't go below last percent-based floor
+                downloaded = max(downloaded, percent_based)
+        else:
+            downloaded = percent_based
+        
+        # Update tracking state
+        DOWNLOAD_TRACKING[t_id] = {
+            "last_downloaded": downloaded,
+            "last_update_time": now,
+            "last_percent": progress
+        }
+        
+        # Calculate ETA from smooth downloaded value
+        remaining_bytes = size - downloaded if size > 0 else 0
         if speed > 0 and remaining_bytes > 0:
             eta = int(remaining_bytes / speed)
         else:
@@ -145,39 +184,38 @@ async def get_download_entries() -> list:
             "size": size,
             "progress": progress,
             "speed": speed,
-            "downloaded": downloaded_approx,
+            "downloaded": downloaded,
             "eta": eta,
             "user_mention": user_mention,
-            "torrent_id": t_id
+            "torrent_id": t_id,
+            "status": torrent_data.get("status", "downloading")
         })
+    
+    # Clean up tracking for torrents no longer active
+    tracked_ids = set(TRACKED_TORRENTS.keys())
+    for t_id in list(DOWNLOAD_TRACKING.keys()):
+        if t_id not in tracked_ids:
+            del DOWNLOAD_TRACKING[t_id]
     
     return download_entries
 
 
-async def update_status_message(sid: int, client, force: bool = False):
+async def update_status_message(sid: int, client, api_data: dict = None):
     """Update an existing status message.
     
     Args:
         sid: Session ID (user_id or chat_id)
         client: Pyrogram client instance
-        force: If True, bypass rate limiting
+        api_data: Pre-fetched API data dict {torrent_id: torrent_data}
     """
     # Check if status exists
     if sid not in STATUS_MESSAGES:
-        # Cancel interval if it exists
-        if sid in STATUS_INTERVALS:
-            STATUS_INTERVALS[sid].cancel()
-            del STATUS_INTERVALS[sid]
         return
     
     status_state = STATUS_MESSAGES[sid]
     
-    # Rate limiting (skip if not forced and updated recently)
-    if not force and (time.time() - status_state["last_update_time"]) < MIN_UPDATE_INTERVAL:
-        return
-    
-    # Get download entries
-    download_entries = await get_download_entries()
+    # Get download entries (using pre-fetched data if available)
+    download_entries = await get_download_entries(api_data=api_data)
     
     # If no downloads, cleanup this status
     if not download_entries:
@@ -263,11 +301,6 @@ async def send_status_message(sid: int, client, message: Message, user_id: int =
             logger.info(f"Deleted old status message for sid {sid}")
         except Exception as e:
             logger.debug(f"Could not delete old status message for sid {sid}: {e}")
-        
-        # Cancel old interval
-        if sid in STATUS_INTERVALS:
-            STATUS_INTERVALS[sid].cancel()
-            del STATUS_INTERVALS[sid]
     
     # Send new status message
     try:
@@ -283,11 +316,7 @@ async def send_status_message(sid: int, client, message: Message, user_id: int =
             "is_user": is_user,
         }
         
-        # Start auto-update interval (only for chat-wide status, not user-specific)
-        if not is_user:
-            task = asyncio.create_task(_auto_update_loop(sid, client))
-            STATUS_INTERVALS[sid] = task
-            logger.info(f"Started auto-update interval for sid {sid}")
+        logger.info(f"Sent status message for sid {sid}")
         
     except Exception as e:
         logger.error(f"Error sending status message for sid {sid}: {e}")
@@ -330,7 +359,7 @@ async def recreate_status_message(sid: int, client):
 
 
 async def cleanup_status_message(sid: int):
-    """Cleanup a status message and its interval.
+    """Cleanup a status message.
     
     Args:
         sid: Session ID to cleanup
@@ -342,13 +371,7 @@ async def cleanup_status_message(sid: int):
             logger.info(f"Cleaned up status message for sid {sid}")
         except Exception as e:
             logger.debug(f"Error deleting status message for sid {sid}: {e}")
-        del STATUS_MESSAGES[sid]
-    
-    # Cancel interval
-    if sid in STATUS_INTERVALS:
-        STATUS_INTERVALS[sid].cancel()
-        del STATUS_INTERVALS[sid]
-        logger.info(f"Cancelled auto-update interval for sid {sid}")
+        STATUS_MESSAGES.pop(sid, None)
 
 
 async def cleanup_all_status_messages():
@@ -357,23 +380,9 @@ async def cleanup_all_status_messages():
     
     for sid in list(STATUS_MESSAGES.keys()):
         await cleanup_status_message(sid)
-
-
-async def _auto_update_loop(sid: int, client):
-    """Auto-update loop for a specific sid.
     
-    Args:
-        sid: Session ID
-        client: Pyrogram client instance
-    """
-    try:
-        while True:
-            await asyncio.sleep(AUTO_UPDATE_INTERVAL)
-            await update_status_message(sid, client, force=False)
-    except asyncio.CancelledError:
-        logger.debug(f"Auto-update loop cancelled for sid {sid}")
-    except Exception as e:
-        logger.error(f"Error in auto-update loop for sid {sid}: {e}")
+    # Also clear download tracking
+    DOWNLOAD_TRACKING.clear()
 
 
 async def handle_pagination_callback(sid: int, action: str, param: Optional[str] = None):

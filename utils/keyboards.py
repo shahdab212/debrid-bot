@@ -36,7 +36,7 @@ def get_file_download_keyboard(file_url: str, file_name: str) -> InlineKeyboardM
     """Returns keyboard with download button for files."""
     from utils.web_stream import get_stream_url, is_web_stream_available
     
-    VIDEO_EXTS = {'.mkv', '.mp4', '.avi', '.mov', '.flv', '.wmv', '.webm', '.m4v', '.mpg', '.mpeg'}
+    VIDEO_EXTS = {'.mkv', '.mp4', '.mov', '.webm', '.m4v'}
     ext = os.path.splitext(file_name)[1].lower()
     
     # Use proxied URL to route through Cloudflare Worker
@@ -56,11 +56,16 @@ def get_file_download_keyboard(file_url: str, file_name: str) -> InlineKeyboardM
     
     return InlineKeyboardMarkup(buttons)
 
-def get_torrent_files_keyboard(files: list, zip_url: str = None) -> InlineKeyboardMarkup:
+def get_torrent_files_keyboard(files: list, zip_url: str = None, file_list_id: str = None) -> InlineKeyboardMarkup:
     """Returns keyboard with buttons for torrent files and optional ZIP download."""
     from utils.web_stream import get_stream_url, is_web_stream_available
+    from config import settings
+    import logging
     
-    VIDEO_EXTS = {'.mkv', '.mp4', '.avi', '.mov', '.flv', '.wmv', '.webm', '.m4v', '.mpg', '.mpeg'}
+    logger = logging.getLogger(__name__)
+    logger.info(f"get_torrent_files_keyboard called with {len(files)} files, zip_url={zip_url}, file_list_id={file_list_id}")
+    
+    VIDEO_EXTS = {'.mkv', '.mp4', '.mov', '.webm', '.m4v'}
     
     buttons = []
     stream_available = is_web_stream_available()
@@ -97,7 +102,84 @@ def get_torrent_files_keyboard(files: list, zip_url: str = None) -> InlineKeyboa
                 # Non-video files or no public URL - download button only
                 buttons.append([InlineKeyboardButton(f"⬇️ {display_name}", url=proxied_url)])
     
+    # Add "See Full List on Web" button if file list ID is provided
+    if file_list_id:
+        web_base_url = settings.WEB_BASE_URL
+        if not web_base_url:
+            # Try to get from RENDER_EXTERNAL_URL
+            web_base_url = os.getenv('RENDER_EXTERNAL_URL', '')
+        
+        logger.info(f"File list ID provided: {file_list_id}, web_base_url: {web_base_url}")
+        
+        if web_base_url:
+            web_base_url = web_base_url.rstrip('/')
+            file_list_url = f"{web_base_url}/files/{file_list_id}"
+            buttons.append([InlineKeyboardButton("📋 See Full List on Web", url=file_list_url)])
+            logger.info(f"Added web button with URL: {file_list_url}")
+        else:
+            logger.warning("WEB_BASE_URL not configured, skipping web button")
+    
     return InlineKeyboardMarkup(buttons) if buttons else None
+
+def get_download_link_keyboard(file_url: str, file_name: str) -> InlineKeyboardMarkup:
+    """Returns keyboard with single Download Link button for single files or ZIP."""
+    from utils.url_proxy import encode_url
+    
+    # Use proxied URL
+    proxied_url = encode_url(file_url, file_name)
+    
+    buttons = [[InlineKeyboardButton("📥 Download Link", url=proxied_url)]]
+    
+    return InlineKeyboardMarkup(buttons)
+
+def get_web_list_keyboard(file_list_id: str) -> InlineKeyboardMarkup:
+    """Returns keyboard with only 'See List on Web' button for multiple files."""
+    from config import settings
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    web_base_url = settings.WEB_BASE_URL
+    if not web_base_url:
+        # Try to get from RENDER_EXTERNAL_URL
+        web_base_url = os.getenv('RENDER_EXTERNAL_URL', '')
+    
+    logger.info(f"Creating web list keyboard with file_list_id: {file_list_id}, web_base_url: {web_base_url}")
+    
+    if not web_base_url:
+        logger.warning("WEB_BASE_URL not configured, cannot create web list button")
+        return None
+    
+    web_base_url = web_base_url.rstrip('/')
+    file_list_url = f"{web_base_url}/files/{file_list_id}"
+    
+    buttons = [[InlineKeyboardButton("📋 See Full List on Web", url=file_list_url)]]
+    logger.info(f"Created web button with URL: {file_list_url}")
+    
+    return InlineKeyboardMarkup(buttons)
+
+
+def get_zip_and_web_keyboard(zip_url: str, file_list_id: str = None) -> InlineKeyboardMarkup:
+    """Returns keyboard with ZIP download button and optional See on Web button."""
+    from config import settings
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    buttons = [[InlineKeyboardButton("📦 Download ZIP", url=zip_url)]]
+    
+    if file_list_id:
+        web_base_url = settings.WEB_BASE_URL
+        if not web_base_url:
+            web_base_url = os.getenv('RENDER_EXTERNAL_URL', '')
+        
+        if web_base_url:
+            web_base_url = web_base_url.rstrip('/')
+            file_list_url = f"{web_base_url}/files/{file_list_id}"
+            buttons.append([InlineKeyboardButton("📋 See Full List on Web", url=file_list_url)])
+    
+    return InlineKeyboardMarkup(buttons)
+
 
 def get_status_pagination_keyboard(current_page: int, total_pages: int) -> InlineKeyboardMarkup:
     """Returns pagination keyboard for consolidated status messages.

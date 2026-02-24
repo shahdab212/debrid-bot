@@ -58,3 +58,14 @@ class Metrics(Base):
     # Optional metadata
     user_id = Column(BigInteger, nullable=True, index=True)
     extra_data = Column(String, nullable=True)  # JSON string for additional data (renamed from metadata)
+
+
+class TorrentFileList(Base):
+    """Model for storing torrent file lists for web display."""
+    __tablename__ = "torrent_file_lists"
+    
+    id = Column(String, primary_key=True)  # UUID
+    torrent_id = Column(String, nullable=False, index=True)
+    torrent_name = Column(String, nullable=False)
+    files_json = Column(String, nullable=False)  # JSON array of file objects
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)

@@ -24,22 +24,15 @@ async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str,
     # Calculate total size from all files (API doesn't provide total size at torrent level)
     size = sum(f.get("size", 0) for f in files)
     
-    # Auto-enable ZIP for torrents with 15 or more files (unless force_no_zip is set)
-    if len(files) >= 15 and not force_no_zip:
+    # Auto-enable ZIP for all multi-file torrents (unless force_no_zip is set)
+    if len(files) > 1 and not force_no_zip:
         create_zip = True
         logger.info(f"Auto-enabling ZIP for {name} ({len(files)} files)")
     
-    # If ZIP flag is set, create ZIP
+    # Create ZIP if needed (status message shows "📦 Zipping..." during this)
     zip_url = None
-    zip_progress_msg = None
-    if create_zip and len(files) > 1:
+    if create_zip:
         try:
-            # Send a new message instead of editing (the status message may be deleted)
-            try:
-                zip_progress_msg = await msg.reply_text("📦 Creating ZIP archive...", quote=False)
-            except Exception as e:
-                logger.debug(f"Could not send ZIP progress message: {e}")
-            
             # Extract all file IDs
             file_ids = [f['id'] for f in files if 'id' in f]
             
@@ -59,16 +52,15 @@ async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str,
                         if zip_status == "create" and not zip_url:
                             logger.info(f"ZIP creation started, polling for completion...")
                             
-                            # Poll for ZIP completion (max 30 attempts = ~60 seconds)
-                            max_attempts = 30
+                            # Poll for ZIP completion (max 150 attempts = ~5 minutes)
+                            max_attempts = 150
                             poll_interval = 2  # seconds
                             
                             for attempt in range(1, max_attempts + 1):
                                 await asyncio.sleep(poll_interval)
                                 
-                                # Check ZIP status (silently, no message updates)
+                                # Check ZIP status
                                 status_resp = await debrid_service.get_zip_status(t_id)
-                                logger.info(f"ZIP Status Poll #{attempt}: {status_resp}")
                                 
                                 if status_resp.get("success"):
                                     status_val = status_resp.get("value", {})
@@ -80,11 +72,18 @@ async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str,
                                             logger.info(f"ZIP ready after {attempt} attempts: {zip_url}")
                                             break
                                         elif current_status not in ["create", "processing", ""]:
-                                            # Unexpected status
                                             logger.warning(f"Unexpected ZIP status: {current_status}")
                                             break
+                                else:
+                                    status_code = status_resp.get("status_code", 0)
+                                    if status_code == 404:
+                                        # 404 means ZIP is still being created, keep polling
+                                        if attempt % 15 == 0:
+                                            logger.info(f"ZIP still processing (attempt {attempt}/{max_attempts})...")
+                                    else:
+                                        logger.error(f"ZIP status check error (attempt {attempt}): {status_resp}")
+                                        break
                             else:
-                                # Timeout reached
                                 logger.warning(f"ZIP creation timeout after {max_attempts} attempts")
                         
                         elif zip_url:
@@ -101,34 +100,37 @@ async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str,
                 
         except Exception as e:
             logger.error(f"ZIP creation error: {e}")
-            # Clean up ZIP progress message if it exists
-            if zip_progress_msg:
-                try:
-                    await zip_progress_msg.delete()
-                except:
-                    pass
 
     if zip_url:
-        links_text = ""  # Clear file list if ZIP is available
-    else:
-        links_text = get_file_links(files)
-    
-    # Get keyboard
-    if zip_url:
-        # ZIP available - show ZIP or files keyboard
-        keyboard = keyboards.get_torrent_files_keyboard(files, zip_url=zip_url)
+        # ZIP available
+        from utils.url_proxy import encode_url
+        proxied_zip = encode_url(zip_url, f"{name}.zip")
+        
+        if len(files) > 1:
+            # Multi-file with ZIP: create file list for web, no embedded links
+            _, file_list_id = await get_file_links(files, t_id, name)
+            links_text = ""  # No embedded links — buttons handle it
+            keyboard = keyboards.get_zip_and_web_keyboard(proxied_zip, file_list_id)
+        else:
+            # Single file ZIP
+            links_text = f"\n\n📦 **Archive:** [{name}.zip]({proxied_zip})"
+            keyboard = keyboards.get_download_link_keyboard(proxied_zip, "ZIP Archive")
     elif len(files) == 1 and files[0].get('downloadUrl'):
-        # Single file - show download/stream keyboard
+        # Single file - use file download keyboard (includes stream button for videos)
         single_file = files[0]
+        links_text, _ = await get_file_links(files, t_id, name)
         keyboard = keyboards.get_file_download_keyboard(
             single_file['downloadUrl'],
             single_file.get('name', 'File')
         )
     elif len(files) > 1:
-        # Multiple files - show files keyboard (up to 3 files with web stream buttons)
-        keyboard = keyboards.get_torrent_files_keyboard(files, zip_url=None)
+        # Multi-file but ZIP failed — show See on Web only
+        links_text = ""
+        _, file_list_id = await get_file_links(files, t_id, name)
+        keyboard = keyboards.get_web_list_keyboard(file_list_id)
     else:
         # No files or no download URLs
+        links_text, _ = await get_file_links(files, t_id, name)
         keyboard = None
     
     # Create user mention
@@ -141,17 +143,6 @@ async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str,
         elapsed_seconds = time.time() - start_time
         time_taken_text = f"\n⏱️ **Time Taken:** {display.human_readable_time(int(elapsed_seconds))}"
     
-    # Add ZIP info if available with download link
-    from utils.url_proxy import encode_url
-    zip_info = ""
-    if zip_url:
-        proxied_zip = encode_url(zip_url, f"{name}.zip")
-        zip_info = (
-            f"\n\n📦 **Archive:** __Complete ZIP archive ready__\n\n"
-            f"🔗 **Download Link:**\n"
-            f"`{proxied_zip}`"
-        )
-    
     final_text = (
         f"✨ **Download Complete!** ✨\n\n"
         f"{'━' * 30}\n\n"
@@ -160,19 +151,11 @@ async def send_completion_message(msg: Message, data: Dict[str, Any], t_id: str,
         f"{time_taken_text}\n\n"
         f"👤 **User:** {user_mention}\n"
         f"🆔 **User ID:** `{user.id}`"
-        f"{links_text}"
-        f"{zip_info}\n\n"
+        f"{links_text}\n\n"
         f"{'━' * 30}"
     )
     
     try:
-        # Delete ZIP progress message if it exists
-        if zip_progress_msg:
-            try:
-                await zip_progress_msg.delete()
-            except Exception as e:
-                logger.debug(f"Could not delete ZIP progress message: {e}")
-        
         # Delete original status/progress message
         try:
             await msg.delete()

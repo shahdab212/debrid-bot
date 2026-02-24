@@ -64,6 +64,10 @@ class BotSettings(BaseSettings):
     ENABLE_METRICS: bool = Field(default=True, description="Enable metrics collection")
     ENABLE_DOWNLOAD_HISTORY: bool = Field(default=True, description="Enable download history tracking")
     
+    # File list viewer settings
+    FILE_LIST_EXPIRY_HOURS: int = Field(default=336)  # File lists expire after 14 days (336 hours)
+    FILE_LIST_CLEANUP_INTERVAL: int = Field(default=21600)  # Cleanup every 6 hours (in seconds)
+    
     # Rate Limiting (for retry logic)
     MAX_RETRIES: int = Field(default=3, description="Maximum retry attempts for failed operations")
     RETRY_BASE_DELAY: float = Field(default=1.0, description="Base delay for exponential backoff (seconds)")

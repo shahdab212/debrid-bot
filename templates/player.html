@@ -117,10 +117,13 @@
         const videoUrl = "{{video_url}}";
         const filename = "{{filename}}";
 
+        // Cloudflare Worker URLs already handle CORS, so use them directly
+        // No need to proxy and waste server bandwidth!
+
         // Initialize ArtPlayer
         const art = new Artplayer({
             container: '#player',
-            url: videoUrl,
+            url: videoUrl,  // Direct URL from Cloudflare Worker
             title: filename,
             volume: 0.8,
             autoplay: false,

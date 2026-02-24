@@ -133,9 +133,18 @@ async def monitor_progress():
                 
                 # Check completion
                 if progress >= 100:
-                    # Done
+                    # Skip if already being handled (zipping or completing)
+                    if torrent_data.get("status") in ("zipping", "completing"):
+                        continue
+                    
+                    # Mark as zipping so the status message shows "📦 Zipping..."
+                    # and we don't re-trigger completion on the next loop
+                    TRACKED_TORRENTS[t_id]["status"] = "zipping"
                     start_time = torrent_data.get("start_time", time.time())
-                    await send_completion_message(msg, data, t_id, user, create_zip, force_no_zip, start_time)
+                    asyncio.create_task(
+                        send_completion_message(msg, data, t_id, user, create_zip, force_no_zip, start_time)
+                    )
+                    logger.info(f"Spawned completion task for torrent {t_id}")
             
             # Collect all chats that have active downloads
             if client and TRACKED_TORRENTS:
@@ -160,11 +169,11 @@ async def monitor_progress():
                         except Exception as e:
                             logger.error(f"Failed to auto-create status for chat {chat_id}: {e}")
             
-            # Update all existing status messages
+            # Update all existing status messages with the same API data snapshot
+            # This ensures all torrents in all status messages update simultaneously
             if client and STATUS_MESSAGES:
                 for sid in list(STATUS_MESSAGES.keys()):
-                    # Force update to ensure latest data
-                    await update_status_message(sid, client, force=True)
+                    await update_status_message(sid, client, api_data=active_torrents)
 
         except Exception as e:
             logger.error(f"Monitor Loop Error: {e}", exc_info=True)

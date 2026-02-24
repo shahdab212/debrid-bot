@@ -437,8 +437,6 @@ async def _handle_hoster_link(link, sent_msg, message):
             f"📏 **File Size:** {display.human_readable_size(file_size)}\n\n"
             f"👤 **User:** {user_mention}\n"
             f"🆔 **User ID:** `{user.id}`\n\n"
-            f"🔗 **Download Link:**\n"
-            f"`{proxied_link}`\n\n"
             f"{'━' * 30}",
             reply_markup=keyboard
         )

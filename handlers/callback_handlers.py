@@ -143,7 +143,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
             for sid in list(STATUS_MESSAGES.keys()):
                 logger.info(f"Updating status for sid {sid} after cancellation")
                 # Force update to show updated list immediately
-                await update_status_message(sid, client, force=True)
+                await update_status_message(sid, client)
             
             if result.get("success"):
                 await callback.message.edit_text(
@@ -182,7 +182,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
                 
                 # Force update to show new page
                 from core.status_tracker import update_status_message
-                await update_status_message(sid, client, force=True)
+                await update_status_message(sid, client)
             
             await callback.answer("➡️ Next page")
         
@@ -199,7 +199,7 @@ async def callback_handler(client: Client, callback: CallbackQuery):
                 
                 # Force update to show new page
                 from core.status_tracker import update_status_message
-                await update_status_message(sid, client, force=True)
+                await update_status_message(sid, client)
             
             await callback.answer("⬅️ Previous page")
         

@@ -437,7 +437,7 @@ async def cancel_handler(client: Client, message: Message):
         for sid in list(STATUS_MESSAGES.keys()):
             logger.info(f"Updating status for sid {sid} after /cancel command")
             # Force update to show updated list immediately
-            await update_status_message(sid, client, force=True)
+            await update_status_message(sid, client)
         
         # Delete the progress message
         if progress_msg:
