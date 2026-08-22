@@ -1,6 +1,6 @@
 # Debrid-Link Telegram Bot
 
-A production-grade Telegram bot for downloading torrents, magnet links, and hoster links using Debrid-Link.fr service.
+A production-grade Telegram bot for downloading torrents, magnet links, and hoster links using Debrid-Link.fr service.Fully vibe coded. Created for educational purposes only.
 
 ## ✨ Features
 
