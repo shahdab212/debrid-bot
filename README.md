@@ -61,8 +61,8 @@ The bot includes a health check endpoint at `/` and `/health` for Render's uptim
 
 ```bash
 # Clone repository
-git clone <your-repo-url>
-cd debrid-bot
+git clone https://github.com/shahdab212/debrid.link-bot
+cd debrid.link-bot
 
 # Create .env file (see Configuration)
 
